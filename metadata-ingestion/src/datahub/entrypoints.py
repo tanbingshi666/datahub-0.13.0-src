@@ -71,9 +71,12 @@ MAX_CONTENT_WIDTH = 120
     prog_name=datahub_package.__package_name__,
 )
 def datahub(
-    debug: bool,
-    log_file: Optional[str],
+        debug: bool,
+        log_file: Optional[str],
 ) -> None:
+    """
+    判断是否 debug 模式
+    """
     debug = debug or get_boolean_env_variable("DATAHUB_DEBUG", False)
 
     # Note that we're purposely leaking the context manager here.
@@ -89,6 +92,9 @@ def datahub(
     if _logging_configured is not None:
         _logging_configured.__exit__(None, None, None)
     _logging_configured = None  # see if we can force python to GC this
+    """
+    配置日志
+    """
     _logging_configured = configure_logging(debug=debug, log_file=log_file)
     _logging_configured.__enter__()
 
@@ -185,6 +191,10 @@ except ImportError as e:
 def main(**kwargs):
     # This wrapper prevents click from suppressing errors.
     try:
+        '''
+        datahub() 里面的逻辑是日志配置 暂时忽略
+        由于在命令行存在 ingest --config xxx.yml 文件 故跳转到 datahub/cli/ingest_cli.py 文件对应的 run()
+        '''
         sys.exit(datahub(standalone_mode=False, **kwargs))
     except click.Abort:
         # Click already automatically prints an abort message, so we can just exit.

@@ -46,6 +46,10 @@ def import_path(path: str) -> Any:
     """
     assert _is_importable(path), "path must be in the appropriate format"
 
+    """
+    场景驱动下：
+    path = datahub.ingestion.sink.datahub_rest:DatahubRestSink -> module_name = datahub.ingestion.sink.datahub_rest object_name = DatahubRestSink
+    """
     if ":" in path:
         module_name, object_name = path.rsplit(":", 1)
     else:
@@ -53,9 +57,15 @@ def import_path(path: str) -> Any:
 
     # Add the current working directory to the path so that we can import local modules.
     with unittest.mock.patch("sys.path", [*sys.path, ""]):
+        """
+        导入模块
+        """
         item = importlib.import_module(module_name)
 
     for attr in object_name.split("."):
+        """
+        从模块中获取属性 也即对应的类 比如 DatahubRestSink
+        """
         item = getattr(item, attr)
     return item
 
@@ -66,7 +76,7 @@ class PluginRegistry(Generic[T]):
     _aliases: Dict[str, Tuple[str, Callable[[], None]]]
 
     def __init__(
-        self, extra_cls_check: Optional[Callable[[Type[T]], None]] = None
+            self, extra_cls_check: Optional[Callable[[Type[T]], None]] = None
     ) -> None:
         self._entrypoints = []
         self._mapping = {}
@@ -91,7 +101,7 @@ class PluginRegistry(Generic[T]):
             self._extra_cls_check(cls)
 
     def _register(
-        self, key: str, tp: Union[str, Type[T], Exception], override: bool = False
+            self, key: str, tp: Union[str, Type[T], Exception], override: bool = False
     ) -> None:
         if not override and key in self._mapping:
             raise KeyError(f"key already in use - {key}")
@@ -107,12 +117,12 @@ class PluginRegistry(Generic[T]):
         self._register(key, import_path)
 
     def register_disabled(
-        self, key: str, reason: Exception, override: bool = False
+            self, key: str, reason: Exception, override: bool = False
     ) -> None:
         self._register(key, reason, override=override)
 
     def register_alias(
-        self, alias: str, real_key: str, fn: Callable[[], None] = lambda: None
+            self, alias: str, real_key: str, fn: Callable[[], None] = lambda: None
     ) -> None:
         self._aliases[alias] = (real_key, fn)
 
@@ -154,11 +164,18 @@ class PluginRegistry(Generic[T]):
         return self._mapping
 
     def get(self, key: str) -> Type[T]:
+        """
+        基于 python 的 entry_points 机制 setup.py 文件中 entry_points 字典指定配置 (默认 datahub.ingestion.sink.plugins)
+        信息注册 KV ("datahub-rest = datahub.ingestion.sink.datahub_rest:DatahubRestSink") 到缓存在 _mapping 属性中
+        """
         self._materialize_entrypoints()
 
         if _is_importable(key):
             # If the key contains a dot or colon, we treat it as a import path and attempt
             # to load it dynamically.
+            """
+            获取对应的 class 比如 DatahubRestSink
+            """
             MyClass = import_path(key)
             self._check_cls(MyClass)
             return MyClass
@@ -185,7 +202,7 @@ class PluginRegistry(Generic[T]):
             return tp
 
     def summary(
-        self, verbose: bool = True, col_width: int = 15, verbose_col_width: int = 20
+            self, verbose: bool = True, col_width: int = 15, verbose_col_width: int = 20
     ) -> str:
         self._materialize_entrypoints()
 

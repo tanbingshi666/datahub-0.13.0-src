@@ -30,11 +30,11 @@ VERSION_PREFIX = "[version=2.0]."
 
 
 def gen_schema_key(
-    db_name: str,
-    schema: str,
-    platform: str,
-    platform_instance: Optional[str],
-    env: Optional[str],
+        db_name: str,
+        schema: str,
+        platform: str,
+        platform_instance: Optional[str],
+        env: Optional[str],
 ) -> SchemaKey:
     return SchemaKey(
         database=db_name,
@@ -47,7 +47,7 @@ def gen_schema_key(
 
 
 def gen_database_key(
-    database: str, platform: str, platform_instance: Optional[str], env: Optional[str]
+        database: str, platform: str, platform_instance: Optional[str], env: Optional[str]
 ) -> DatabaseKey:
     return DatabaseKey(
         database=database,
@@ -59,22 +59,22 @@ def gen_database_key(
 
 
 def gen_schema_container(
-    schema: str,
-    database: str,
-    sub_types: List[str],
-    database_container_key: ContainerKey,
-    schema_container_key: ContainerKey,
-    domain_registry: Optional[DomainRegistry] = None,
-    domain_config: Optional[Dict[str, AllowDenyPattern]] = None,
-    name: Optional[str] = None,
-    description: Optional[str] = None,
-    owner_urn: Optional[str] = None,
-    external_url: Optional[str] = None,
-    tags: Optional[List[str]] = None,
-    qualified_name: Optional[str] = None,
-    created: Optional[int] = None,
-    last_modified: Optional[int] = None,
-    extra_properties: Optional[Dict[str, str]] = None,
+        schema: str,
+        database: str,
+        sub_types: List[str],
+        database_container_key: ContainerKey,
+        schema_container_key: ContainerKey,
+        domain_registry: Optional[DomainRegistry] = None,
+        domain_config: Optional[Dict[str, AllowDenyPattern]] = None,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        owner_urn: Optional[str] = None,
+        external_url: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        qualified_name: Optional[str] = None,
+        created: Optional[int] = None,
+        last_modified: Optional[int] = None,
+        extra_properties: Optional[Dict[str, str]] = None,
 ) -> Iterable[MetadataWorkUnit]:
     domain_urn: Optional[str] = None
     if domain_registry:
@@ -103,9 +103,9 @@ def gen_schema_container(
 
 
 def gen_domain_urn(
-    dataset_name: str,
-    domain_config: Dict[str, AllowDenyPattern],
-    domain_registry: DomainRegistry,
+        dataset_name: str,
+        domain_config: Dict[str, AllowDenyPattern],
+        domain_registry: DomainRegistry,
 ) -> Optional[str]:
     domain_urn: Optional[str] = None
 
@@ -119,20 +119,20 @@ def gen_domain_urn(
 
 
 def gen_database_container(
-    database: str,
-    database_container_key: ContainerKey,
-    sub_types: List[str],
-    domain_config: Optional[Dict[str, AllowDenyPattern]] = None,
-    domain_registry: Optional[DomainRegistry] = None,
-    name: Optional[str] = None,
-    description: Optional[str] = None,
-    owner_urn: Optional[str] = None,
-    external_url: Optional[str] = None,
-    tags: Optional[List[str]] = None,
-    qualified_name: Optional[str] = None,
-    created: Optional[int] = None,
-    last_modified: Optional[int] = None,
-    extra_properties: Optional[Dict[str, str]] = None,
+        database: str,
+        database_container_key: ContainerKey,
+        sub_types: List[str],
+        domain_config: Optional[Dict[str, AllowDenyPattern]] = None,
+        domain_registry: Optional[DomainRegistry] = None,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        owner_urn: Optional[str] = None,
+        external_url: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        qualified_name: Optional[str] = None,
+        created: Optional[int] = None,
+        last_modified: Optional[int] = None,
+        extra_properties: Optional[Dict[str, str]] = None,
 ) -> Iterable[MetadataWorkUnit]:
     domain_urn: Optional[str] = None
     if domain_registry:
@@ -141,6 +141,9 @@ def gen_database_container(
             database, domain_config=domain_config, domain_registry=domain_registry
         )
 
+    """
+    生成容器
+    """
     yield from gen_containers(
         container_key=database_container_key,
         name=name if name else database,
@@ -158,8 +161,8 @@ def gen_database_container(
 
 
 def add_table_to_schema_container(
-    dataset_urn: str,
-    parent_container_key: ContainerKey,
+        dataset_urn: str,
+        parent_container_key: ContainerKey,
 ) -> Iterable[MetadataWorkUnit]:
     yield from add_dataset_to_container(
         container_key=parent_container_key,
@@ -168,10 +171,10 @@ def add_table_to_schema_container(
 
 
 def get_domain_wu(
-    dataset_name: str,
-    entity_urn: str,
-    domain_config: Dict[str, AllowDenyPattern],
-    domain_registry: DomainRegistry,
+        dataset_name: str,
+        entity_urn: str,
+        domain_config: Dict[str, AllowDenyPattern],
+        domain_registry: DomainRegistry,
 ) -> Iterable[MetadataWorkUnit]:
     domain_urn = gen_domain_urn(dataset_name, domain_config, domain_registry)
     if domain_urn:
@@ -182,7 +185,7 @@ def get_domain_wu(
 
 
 def get_dataplatform_instance_aspect(
-    dataset_urn: str, platform: str, platform_instance: Optional[str]
+        dataset_urn: str, platform: str, platform_instance: Optional[str]
 ) -> Optional[MetadataWorkUnit]:
     # If we are a platform instance based source, emit the instance aspect
     if platform_instance:
@@ -200,9 +203,9 @@ def get_dataplatform_instance_aspect(
 
 
 def gen_lineage(
-    dataset_urn: str,
-    lineage_info: Optional[Tuple[UpstreamLineage, Dict[str, str]]] = None,
-    incremental_lineage: bool = True,
+        dataset_urn: str,
+        lineage_info: Optional[Tuple[UpstreamLineage, Dict[str, str]]] = None,
+        incremental_lineage: bool = True,
 ) -> Iterable[MetadataWorkUnit]:
     if lineage_info is None:
         return
@@ -242,7 +245,7 @@ def downgrade_schema_field_from_v2(field: SchemaField) -> SchemaField:
 
 # downgrade a list of schema fields
 def downgrade_schema_from_v2(
-    canonical_schema: List[SchemaField],
+        canonical_schema: List[SchemaField],
 ) -> List[SchemaField]:
     return [downgrade_schema_field_from_v2(field) for field in canonical_schema]
 

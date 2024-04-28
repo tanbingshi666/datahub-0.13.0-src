@@ -73,7 +73,7 @@ def extract_name_from_filename(filename: str, fallback_name: str) -> str:
             # Find the index of 'site-packages' in the path
             site_packages_index = path_parts.index("site-packages")
             # Join the parts from 'site-packages' onwards with '.'
-            return ".".join(path_parts[site_packages_index + 1 :])
+            return ".".join(path_parts[site_packages_index + 1:])
 
         # We're probably in a development environment, so take everything after 'metadata-ingestion'
         metadata_ingestion_index = next(
@@ -82,7 +82,7 @@ def extract_name_from_filename(filename: str, fallback_name: str) -> str:
         )
         if metadata_ingestion_index is not None:
             # Join the parts from 'metadata-ingestion/src' onwards with '.'
-            return ".".join(path_parts[metadata_ingestion_index + 2 :])
+            return ".".join(path_parts[metadata_ingestion_index + 2:])
 
     return fallback_name
 
@@ -198,11 +198,17 @@ def configure_logging(debug: bool, log_file: Optional[str] = None) -> Iterator[N
 
     with contextlib.ExitStack() as stack:
         # Create stdout handler.
+        """
+        创建标准输出流 handler
+        """
         stream_handler = logging.StreamHandler()
         stream_handler.addFilter(_DatahubLogFilter(debug=debug))
         stream_handler.setFormatter(_stream_formatter)
 
         # Create file handler.
+        """
+        创建文件 handler
+        """
         file_handler: logging.Handler
         if log_file:
             file = stack.enter_context(open(log_file, "w"))
@@ -216,10 +222,16 @@ def configure_logging(debug: bool, log_file: Optional[str] = None) -> Iterator[N
             file_handler = logging.NullHandler()
 
         # Create the in-memory buffer handler.
+        """
+        创建内存缓存 handler
+        """
         buffer_handler = _BufferLogHandler(_log_buffer)
         buffer_handler.addFilter(_DatahubLogFilter(debug=debug))
         buffer_handler.setFormatter(_default_formatter)
 
+        """
+        日志 handlers
+        """
         handlers = [
             stream_handler,
             file_handler,
@@ -227,6 +239,9 @@ def configure_logging(debug: bool, log_file: Optional[str] = None) -> Iterator[N
         ]
 
         # Configure the loggers.
+        """
+        配置日志等级和 handlers
+        """
         root_logger = logging.getLogger()
         _remove_all_handlers(root_logger)
         root_logger.setLevel(logging.INFO)

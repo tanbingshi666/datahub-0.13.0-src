@@ -40,9 +40,9 @@ class TwoTierSQLAlchemyConfig(BasicSQLAlchemyConfig):
     )
 
     def get_sql_alchemy_url(
-        self,
-        uri_opts: typing.Optional[typing.Dict[str, typing.Any]] = None,
-        current_db: typing.Optional[str] = None,
+            self,
+            uri_opts: typing.Optional[typing.Dict[str, typing.Any]] = None,
+            current_db: typing.Optional[str] = None,
     ) -> str:
         if self.sqlalchemy_uri:
             parsed_url = urllib.parse.urlsplit(self.sqlalchemy_uri)
@@ -69,7 +69,13 @@ class TwoTierSQLAlchemyConfig(BasicSQLAlchemyConfig):
 
 class TwoTierSQLAlchemySource(SQLAlchemySource):
     def __init__(self, config, ctx, platform):
+        """
+        调用其父类 __init__()
+        """
         super().__init__(config, ctx, platform)
+        """
+        配置信息
+        """
         self.config: TwoTierSQLAlchemyConfig = config
 
     def get_db_schema(self, dataset_identifier: str) -> Tuple[Optional[str], str]:
@@ -88,11 +94,11 @@ class TwoTierSQLAlchemySource(SQLAlchemySource):
         )
 
     def add_table_to_schema_container(
-        self,
-        dataset_urn: str,
-        db_name: str,
-        schema: str,
-        schema_container_key: Optional[ContainerKey] = None,
+            self,
+            dataset_urn: str,
+            db_name: str,
+            schema: str,
+            schema_container_key: Optional[ContainerKey] = None,
     ) -> Iterable[MetadataWorkUnit]:
         yield from add_table_to_schema_container(
             dataset_urn=dataset_urn,
@@ -100,7 +106,7 @@ class TwoTierSQLAlchemySource(SQLAlchemySource):
         )
 
     def get_allowed_schemas(
-        self, inspector: Inspector, db_name: str
+            self, inspector: Inspector, db_name: str
     ) -> typing.Iterable[str]:
         # This method returns schema names but for 2 tier databases there is no schema layer at all hence passing
         # dbName itself as an allowed schema
@@ -130,10 +136,10 @@ class TwoTierSQLAlchemySource(SQLAlchemySource):
                         yield inspector
 
     def gen_schema_containers(
-        self,
-        schema: str,
-        database: str,
-        extra_properties: Optional[Dict[str, Any]] = None,
+            self,
+            schema: str,
+            database: str,
+            extra_properties: Optional[Dict[str, Any]] = None,
     ) -> Iterable[MetadataWorkUnit]:
         return []
 

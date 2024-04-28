@@ -54,17 +54,17 @@ class LoggingCallback(WriteCallback):
         self.name = name
 
     def on_success(
-        self, record_envelope: RecordEnvelope, success_metadata: dict
+            self, record_envelope: RecordEnvelope, success_metadata: dict
     ) -> None:
         logger.debug(
             f"{self.name} sink wrote workunit {record_envelope.metadata['workunit_id']}"
         )
 
     def on_failure(
-        self,
-        record_envelope: RecordEnvelope,
-        failure_exception: Exception,
-        failure_metadata: dict,
+            self,
+            record_envelope: RecordEnvelope,
+            failure_exception: Exception,
+            failure_metadata: dict,
     ) -> None:
         logger.error(
             f"{self.name} failed to write record with workunit {record_envelope.metadata['workunit_id']}"
@@ -81,15 +81,15 @@ class DeadLetterQueueCallback(WriteCallback):
         logger.info(f"Failure logging enabled. Will log to {config.filename}.")
 
     def on_success(
-        self, record_envelope: RecordEnvelope, success_metadata: dict
+            self, record_envelope: RecordEnvelope, success_metadata: dict
     ) -> None:
         pass
 
     def on_failure(
-        self,
-        record_envelope: RecordEnvelope,
-        failure_exception: Exception,
-        failure_metadata: dict,
+            self,
+            record_envelope: RecordEnvelope,
+            failure_exception: Exception,
+            failure_metadata: dict,
     ) -> None:
         if "workunit_id" in record_envelope.metadata:
             if isinstance(record_envelope.record, MetadataChangeProposalClass):
@@ -189,14 +189,14 @@ class Pipeline:
     transformers: List[Transformer]
 
     def __init__(
-        self,
-        config: PipelineConfig,
-        dry_run: bool = False,
-        preview_mode: bool = False,
-        preview_workunits: int = 10,
-        report_to: Optional[str] = None,
-        no_default_report: bool = False,
-        no_progress: bool = False,
+            self,
+            config: PipelineConfig,
+            dry_run: bool = False,
+            preview_mode: bool = False,
+            preview_workunits: int = 10,
+            report_to: Optional[str] = None,
+            no_default_report: bool = False,
+            no_progress: bool = False,
     ):
         self.config = config
         self.dry_run = dry_run
@@ -210,13 +210,23 @@ class Pipeline:
         self.cli_report = CliReport()
 
         self.graph = None
+        """
+        连接 datahub (测试连接)
+        """
         with _add_init_error_context("connect to DataHub"):
             if self.config.datahub_api:
+                """
+                实例化 DataHubGraph 主要完成与 datahub gms 进行测试连接获取 server id (由 gms server 生成返回)
+                """
                 self.graph = DataHubGraph(self.config.datahub_api)
 
             telemetry.telemetry_instance.update_capture_exception_context(
                 server=self.graph
             )
+
+        """
+        Pipeline 上下文信息
+        """
         with _add_init_error_context("set up framework context"):
             self.ctx = PipelineContext(
                 run_id=self.config.run_id,
@@ -227,40 +237,82 @@ class Pipeline:
                 pipeline_config=self.config,
             )
 
+        """
+        获取 sink 类型 比如 datahub-rest
+        """
         sink_type = self.config.sink.type
         with _add_init_error_context(f"find a registered sink for type {sink_type}"):
+            """
+            根据 sink 类型获取对应的 sink class 比如 DatahubRestSink
+            """
             sink_class = sink_registry.get(sink_type)
 
         with _add_init_error_context(f"configure the sink ({sink_type})"):
+            """
+            获取 sink 配置
+            场景驱动下 sink = DatahubRestSink sink_config = {"server": "http://127.0.0.1:8080"}
+            """
             sink_config = self.config.sink.dict().get("config") or {}
+            """
+            实例化 sink
+            场景驱动下 调用 DatahubRestSink 的父类 Sink 的 __init()
+            """
             self.sink = sink_class.create(sink_config, self.ctx)
             logger.debug(f"Sink type {self.config.sink.type} ({sink_class}) configured")
+
             logger.info(f"Sink configured successfully. {self.sink.configured()}")
 
         # once a sink is configured, we can configure reporting immediately to get observability
+        """
+        一旦 sink 配置文件(也即根据配置文件创建对应的 sink 类) 则立马配置 report 以便观测
+        默认情况下 report_to = datahub
+        """
         with _add_init_error_context("configure reporters"):
             self._configure_reporting(report_to, no_default_report)
 
+        """
+        获取 source 类型 比如 mysql
+        """
         source_type = self.config.source.type
         with _add_init_error_context(
-            f"find a registered source for type {source_type}"
+                f"find a registered source for type {source_type}"
         ):
+            """
+            获取 source 类型对应的 class 逻辑跟 type 类型获取对应的 class 类型
+            场景驱动下 source class = MySQLSource (datahub.ingestion.source.sql.mysql:MySQLSource)MySQLSource
+            """
             source_class = source_registry.get(source_type)
 
         with _add_init_error_context(f"configure the source ({source_type})"):
+            """
+            实例化 source class
+            场景驱动下调用 Source 子类 MySQLSource create()
+            """
             self.source = source_class.create(
                 self.config.source.dict().get("config", {}), self.ctx
             )
             logger.debug(f"Source type {source_type} ({source_class}) configured")
             logger.info("Source configured successfully.")
 
+        """
+        获取 source 抽取器类型 默认为 generic
+        """
         extractor_type = self.config.source.extractor
         with _add_init_error_context(f"configure the extractor ({extractor_type})"):
+            """
+            默认情况下 extractor class 为 WorkUnitRecordExtractor
+            """
             extractor_class = extractor_registry.get(extractor_type)
+            """
+            实例化 WorkUnitRecordExtractor
+            """
             self.extractor = extractor_class(
                 self.config.source.extractor_config, self.ctx
             )
 
+        """
+        配置 transforms 如果配置文件存在对应的配置
+        """
         with _add_init_error_context("configure transformers"):
             self._configure_transforms()
 
@@ -279,14 +331,17 @@ class Pipeline:
                 )
 
     def _configure_reporting(
-        self, report_to: Optional[str], no_default_report: bool
+            self, report_to: Optional[str], no_default_report: bool
     ) -> None:
         if report_to == "datahub":
             # we add the default datahub reporter unless a datahub reporter is already configured
             if not no_default_report and (
-                not self.config.reporting
-                or "datahub" not in [x.type for x in self.config.reporting]
+                    not self.config.reporting
+                    or "datahub" not in [x.type for x in self.config.reporting]
             ):
+                """
+                往 reporting 添加 type:datahub 配置
+                """
                 self.config.reporting.append(
                     ReporterConfig.parse_obj({"type": "datahub"})
                 )
@@ -298,11 +353,20 @@ class Pipeline:
                 )
             )
 
+        """
+        根据 report type 获取对应的 report class 并实例化
+        场景驱动情况下 
+        report_type = datahub
+        reporter_class = datahub.ingestion.reporting.datahub_ingestion_run_summary_provider:DatahubIngestionRunSummaryProvider
+        """
         for reporter in self.config.reporting:
             reporter_type = reporter.type
             reporter_class = reporting_provider_registry.get(reporter_type)
             reporter_config_dict = reporter.dict().get("config", {})
             try:
+                """
+                实例化 DatahubIngestionRunSummaryProvider 对象并添加 reporters 集合中
+                """
                 self.reporters.append(
                     reporter_class.create(
                         config_dict=reporter_config_dict,
@@ -323,8 +387,14 @@ class Pipeline:
                     )
 
     def _notify_reporters_on_ingestion_start(self) -> None:
+        """
+        默认情况下 reporters 只有一个值 DatahubIngestionRunSummaryProvider
+        """
         for reporter in self.reporters:
             try:
+                """
+                执行对应的 reporter on_start()
+                """
                 reporter.on_start(ctx=self.ctx)
             except Exception as e:
                 logger.warning("Reporting failed on start", exc_info=e)
@@ -348,17 +418,24 @@ class Pipeline:
 
     @classmethod
     def create(
-        cls,
-        config_dict: dict,
-        dry_run: bool = False,
-        preview_mode: bool = False,
-        preview_workunits: int = 10,
-        report_to: Optional[str] = "datahub",
-        no_default_report: bool = False,
-        no_progress: bool = False,
-        raw_config: Optional[dict] = None,
+            cls,
+            config_dict: dict,
+            dry_run: bool = False,
+            preview_mode: bool = False,
+            preview_workunits: int = 10,
+            report_to: Optional[str] = "datahub",
+            no_default_report: bool = False,
+            no_progress: bool = False,
+            raw_config: Optional[dict] = None,
     ) -> "Pipeline":
+        """
+        将配置文件解析 dict 对象封装为 PipelineConfig 对象
+        """
         config = PipelineConfig.from_dict(config_dict, raw_config)
+
+        """
+        创建 Pipeline 对象 调用 Pipeline __init__()
+        """
         return cls(
             config,
             dry_run=dry_run,
@@ -381,6 +458,9 @@ class Pipeline:
 
     def run(self) -> None:
         with contextlib.ExitStack() as stack:
+            """
+            是否生成内存配置 默认 None
+            """
             if self.config.flags.generate_memory_profiles:
                 import memray
 
@@ -390,7 +470,14 @@ class Pipeline:
                     )
                 )
 
+            """
+            初始化状态为 unknown
+            """
             self.final_status = "unknown"
+
+            """
+            通知 reporter ingestion 开始 也即向 datahub gms server 发送一个请求
+            """
             self._notify_reporters_on_ingestion_start()
             callback = None
             try:
@@ -401,23 +488,89 @@ class Pipeline:
                         self.ctx, self.config.failure_log.log_config
                     )
                 )
+
+                """
+                执行 source 的元数据拉取 入口为 source.get_workunits()
+                场景驱动情况下 source = MySQLSource
+                """
                 for wu in itertools.islice(
-                    self.source.get_workunits(),
-                    self.preview_workunits if self.preview_mode else None,
+                        self.source.get_workunits(),
+                        self.preview_workunits if self.preview_mode else None,
                 ):
                     try:
                         if self._time_to_print() and not self.no_progress:
+                            """
+                            打印信息 比如如下：
+                            Cli report:
+                            {'cli_version': '0.13.1.2',
+                             'cli_entry_location': '/opt/app/python-3.8.17/lib/python3.8/site-packages/datahub/__init__.py',
+                             'py_version': '3.8.17 (default, Mar 28 2024, 09:53:27) \n[GCC 4.8.5 20150623 (Red Hat 4.8.5-44)]',
+                             'py_exec_path': '/usr/local/bin/python3',
+                             'os_details': 'Linux-3.10.0-1062.el7.x86_64-x86_64-with-glibc2.17',
+                             'mem_info': '91.33 MB',
+                             'peak_memory_usage': '91.33 MB',
+                             'disk_info': {'total': '53.66 GB', 'used': '41.63 GB', 'used_initally': '41.63 GB', 'free': '12.03 GB'},
+                             'peak_disk_usage': '41.63 GB',
+                             'thread_count': 2,
+                             'peak_thread_count': 2}
+                            Source (mysql) report:
+                            {'num_tables_fetch_sample_values_failed': 0,
+                             'num_tables_classification_attempted': 0,
+                             'num_tables_classification_failed': 0,
+                             'num_tables_classification_found': 0,
+                             'info_types_detected': {},
+                             'events_produced': 1,
+                             'events_produced_per_sec': 0,
+                             'entities': {'container': ['urn:li:container:35dca3613014b8a1fc14e882606049b3']},
+                             'aspects': {'container': {'containerProperties': 1}},
+                             'warnings': {},
+                             'failures': {},
+                             'soft_deleted_stale_entities': [],
+                             'tables_scanned': 1,
+                             'views_scanned': 0,
+                             'entities_profiled': 0,
+                             'filtered': [],
+                             'num_view_definitions_parsed': 0,
+                             'num_view_definitions_failed_parsing': 0,
+                             'num_view_definitions_failed_column_parsing': 0,
+                             'view_definitions_parsing_failures': [],
+                             'start_time': '2024-04-23 16:34:17.199805 (20.31 seconds ago)',
+                             'running_time': '20.31 seconds'}
+                            Sink (datahub-rest) report:
+                            {'total_records_written': 0,
+                             'records_written_per_second': 0,
+                             'warnings': [],
+                             'failures': [],
+                             'start_time': '2024-04-23 16:33:26.336405 (1 minute and 11.18 seconds ago)',
+                             'current_time': '2024-04-23 16:34:37.512382 (now)',
+                             'total_duration_in_seconds': 71.18,
+                             'max_threads': 15,
+                             'gms_version': 'v0.13.0',
+                             'pending_requests': 0}
+                            
+                            ⏳ Pipeline running successfully so far; produced 1 events in 20.31 seconds.
+                            """
                             self.pretty_print_summary(currently_running=True)
                     except Exception as e:
                         logger.warning(f"Failed to print summary {e}")
 
+                    """
+                    如果不是 dry run 则处理工作单元执行 本质上面已经执行 source.get_workunits() 这里没有核心逻辑 只是简单判断赋值而已
+                    """
                     if not self.dry_run:
                         self.sink.handle_work_unit_start(wu)
                     try:
+                        """
+                        如果配置文件配置了 transform 则执行对应的 transform
+                        """
                         record_envelopes = self.extractor.get_records(wu)
                         for record_envelope in self.transform(record_envelopes):
                             if not self.dry_run:
                                 try:
+                                    """
+                                    异步发送 metadata 给 datahub gms server
+                                    也即发送 HTTP Post 请求 url = ${gms_server:127.0.0.1:8080}/entities?action=ingest
+                                    """
                                     self.sink.write_record_async(
                                         record_envelope, callback
                                     )
@@ -438,25 +591,31 @@ class Pipeline:
                         )
                         # TODO: Transformer errors should cause the pipeline to fail.
 
+                    """
+                    收尾操作 source 关闭等
+                    """
                     self.extractor.close()
                     if not self.dry_run:
                         self.sink.handle_work_unit_end(wu)
                 self.source.close()
                 # no more data is coming, we need to let the transformers produce any additional records if they are holding on to state
                 for record_envelope in self.transform(
-                    [
-                        RecordEnvelope(
-                            record=EndOfStream(),
-                            metadata={"workunit_id": "end-of-stream"},
-                        )
-                    ]
+                        [
+                            RecordEnvelope(
+                                record=EndOfStream(),
+                                metadata={"workunit_id": "end-of-stream"},
+                            )
+                        ]
                 ):
                     if not self.dry_run and not isinstance(
-                        record_envelope.record, EndOfStream
+                            record_envelope.record, EndOfStream
                     ):
                         # TODO: propagate EndOfStream and other control events to sinks, to allow them to flush etc.
                         self.sink.write_record_async(record_envelope, callback)
 
+                """
+                收尾操作 sink 关闭等
+                """
                 self.sink.close()
                 self.process_commits()
                 self.final_status = "completed"
@@ -506,8 +665,8 @@ class Pipeline:
             )
 
             if (
-                commit_policy == CommitPolicy.ON_NO_ERRORS_AND_NO_WARNINGS
-                and (has_errors or has_warnings)
+                    commit_policy == CommitPolicy.ON_NO_ERRORS_AND_NO_WARNINGS
+                    and (has_errors or has_warnings)
             ) or (commit_policy == CommitPolicy.ON_NO_ERRORS and has_errors):
                 logger.warning(
                     f"Skipping commit request for {name} since policy requirements are not met."
@@ -593,7 +752,7 @@ class Pipeline:
         )
 
     def pretty_print_summary(
-        self, warnings_as_failure: bool = False, currently_running: bool = False
+            self, warnings_as_failure: bool = False, currently_running: bool = False
     ) -> int:
         click.echo()
         click.secho("Cli report:", bold=True)
@@ -616,7 +775,7 @@ class Pipeline:
             )
             num_failures_sink = len(self.sink.get_report().failures)
             click.secho(
-                f"{'⏳' if currently_running else ''} Pipeline {'running' if currently_running else 'finished'} with at least {num_failures_source+num_failures_sink} failures{' so far' if currently_running else ''}; produced {workunits_produced} events {duration_message}",
+                f"{'⏳' if currently_running else ''} Pipeline {'running' if currently_running else 'finished'} with at least {num_failures_source + num_failures_sink} failures{' so far' if currently_running else ''}; produced {workunits_produced} events {duration_message}",
                 fg=self._get_text_color(
                     running=currently_running,
                     failures=True,
@@ -626,15 +785,15 @@ class Pipeline:
             )
             return 1
         elif (
-            self.source.get_report().warnings
-            or self.sink.get_report().warnings
-            or len(global_warnings) > 0
+                self.source.get_report().warnings
+                or self.sink.get_report().warnings
+                or len(global_warnings) > 0
         ):
             num_warn_source = self._approx_all_vals(self.source.get_report().warnings)
             num_warn_sink = len(self.sink.get_report().warnings)
             num_warn_global = len(global_warnings)
             click.secho(
-                f"{'⏳' if currently_running else ''} Pipeline {'running' if currently_running else 'finished'} with at least {num_warn_source+num_warn_sink+num_warn_global} warnings{' so far' if currently_running else ''}; produced {workunits_produced} events {duration_message}",
+                f"{'⏳' if currently_running else ''} Pipeline {'running' if currently_running else 'finished'} with at least {num_warn_source + num_warn_sink + num_warn_global} warnings{' so far' if currently_running else ''}; produced {workunits_produced} events {duration_message}",
                 fg=self._get_text_color(
                     running=currently_running, failures=False, warnings=True
                 ),

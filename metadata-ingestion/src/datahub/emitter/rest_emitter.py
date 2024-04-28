@@ -56,34 +56,45 @@ class DataHubRestEmitter(Closeable, Emitter):
     _retry_max_times: int = _DEFAULT_RETRY_MAX_TIMES
 
     def __init__(
-        self,
-        gms_server: str,
-        token: Optional[str] = None,
-        timeout_sec: Optional[float] = None,
-        connect_timeout_sec: Optional[float] = None,
-        read_timeout_sec: Optional[float] = None,
-        retry_status_codes: Optional[List[int]] = None,
-        retry_methods: Optional[List[str]] = None,
-        retry_max_times: Optional[int] = None,
-        extra_headers: Optional[Dict[str, str]] = None,
-        ca_certificate_path: Optional[str] = None,
-        client_certificate_path: Optional[str] = None,
-        disable_ssl_verification: bool = False,
+            self,
+            gms_server: str,
+            token: Optional[str] = None,
+            timeout_sec: Optional[float] = None,
+            connect_timeout_sec: Optional[float] = None,
+            read_timeout_sec: Optional[float] = None,
+            retry_status_codes: Optional[List[int]] = None,
+            retry_methods: Optional[List[str]] = None,
+            retry_max_times: Optional[int] = None,
+            extra_headers: Optional[Dict[str, str]] = None,
+            ca_certificate_path: Optional[str] = None,
+            client_certificate_path: Optional[str] = None,
+            disable_ssl_verification: bool = False,
     ):
         if not gms_server:
             raise ConfigurationError("gms server is required")
+        """
+        datahub gms server 连接地址 比如 http://localhost:8080
+        """
         self._gms_server = gms_server
         self._token = token
         self.server_config: Dict[str, Any] = {}
 
+        """
+        开启一个 request Session
+        """
         self._session = requests.Session()
-
+        """
+        更新配置 session 请求头信息
+        """
         self._session.headers.update(
             {
                 "X-RestLi-Protocol-Version": "2.0.0",
                 "Content-Type": "application/json",
             }
         )
+        """
+        判断是否存在 token 如果不存在 则无需设置
+        """
         if token:
             self._session.headers.update({"Authorization": f"Bearer {token}"})
         else:
@@ -91,6 +102,9 @@ class DataHubRestEmitter(Closeable, Emitter):
             if system_auth is not None:
                 self._session.headers.update({"Authorization": system_auth})
 
+        """
+        以下额外的参数 暂时忽略
+        """
         if extra_headers:
             self._session.headers.update(extra_headers)
 
@@ -104,10 +118,10 @@ class DataHubRestEmitter(Closeable, Emitter):
             self._session.verify = False
 
         self._connect_timeout_sec = (
-            connect_timeout_sec or timeout_sec or _DEFAULT_CONNECT_TIMEOUT_SEC
+                connect_timeout_sec or timeout_sec or _DEFAULT_CONNECT_TIMEOUT_SEC
         )
         self._read_timeout_sec = (
-            read_timeout_sec or timeout_sec or _DEFAULT_READ_TIMEOUT_SEC
+                read_timeout_sec or timeout_sec or _DEFAULT_READ_TIMEOUT_SEC
         )
 
         if self._connect_timeout_sec < 1 or self._read_timeout_sec < 1:
@@ -118,6 +132,9 @@ class DataHubRestEmitter(Closeable, Emitter):
         if retry_status_codes is not None:  # Only if missing. Empty list is allowed
             self._retry_status_codes = retry_status_codes
 
+        """
+        判断是否开启重试连接 datahub gms server
+        """
         if retry_methods is not None:
             self._retry_methods = retry_methods
 
@@ -145,6 +162,9 @@ class DataHubRestEmitter(Closeable, Emitter):
                 raise_on_status=False,
             )
 
+        """
+        session 绑定对应的 HTTP 适配器 (适配 http:// 和 https://)
+        """
         adapter = HTTPAdapter(
             pool_connections=100, pool_maxsize=100, max_retries=retry_strategy
         )
@@ -153,6 +173,9 @@ class DataHubRestEmitter(Closeable, Emitter):
 
         # Shim session.request to apply default timeout values.
         # Via https://stackoverflow.com/a/59317604.
+        """
+        session request 应用默认的超时配置
+        """
         self._session.request = functools.partial(  # type: ignore
             self._session.request,
             timeout=(self._connect_timeout_sec, self._read_timeout_sec),
@@ -171,9 +194,9 @@ class DataHubRestEmitter(Closeable, Emitter):
                 # Looks like we either connected to an old GMS or to some other service. Let's see if we can determine which before raising an error
                 # A common misconfiguration is connecting to datahub-frontend so we special-case this check
                 if (
-                    config.get("config", {}).get("application") == "datahub-frontend"
-                    or config.get("config", {}).get("shouldShowDatasetLineage")
-                    is not None
+                        config.get("config", {}).get("application") == "datahub-frontend"
+                        or config.get("config", {}).get("shouldShowDatasetLineage")
+                        is not None
                 ):
                     raise ConfigurationError(
                         "You seem to have connected to the frontend instead of the GMS endpoint. "
@@ -201,23 +224,26 @@ class DataHubRestEmitter(Closeable, Emitter):
         return DataHubGraph.from_emitter(self)
 
     def emit(
-        self,
-        item: Union[
-            MetadataChangeEvent,
-            MetadataChangeProposal,
-            MetadataChangeProposalWrapper,
-            UsageAggregation,
-        ],
-        callback: Optional[Callable[[Exception, str], None]] = None,
+            self,
+            item: Union[
+                MetadataChangeEvent,
+                MetadataChangeProposal,
+                MetadataChangeProposalWrapper,
+                UsageAggregation,
+            ],
+            callback: Optional[Callable[[Exception, str], None]] = None,
     ) -> None:
         try:
             if isinstance(item, UsageAggregation):
                 self.emit_usage(item)
             elif isinstance(
-                item, (MetadataChangeProposal, MetadataChangeProposalWrapper)
+                    item, (MetadataChangeProposal, MetadataChangeProposalWrapper)
             ):
                 self.emit_mcp(item)
             else:
+                """
+                发送数据
+                """
                 self.emit_mce(item)
         except Exception as e:
             if callback:
@@ -228,8 +254,14 @@ class DataHubRestEmitter(Closeable, Emitter):
                 callback(None, "success")  # type: ignore
 
     def emit_mce(self, mce: MetadataChangeEvent) -> None:
+        """
+        构建请求 url
+        """
         url = f"{self._gms_server}/entities?action=ingest"
 
+        """
+        构建请求信息
+        """
         raw_mce_obj = mce.proposedSnapshot.to_obj()
         mce_obj = pre_json_transform(raw_mce_obj)
         snapshot_fqn = (
@@ -247,10 +279,13 @@ class DataHubRestEmitter(Closeable, Emitter):
         }
         payload = json.dumps(snapshot)
 
+        """
+        执行请求
+        """
         self._emit_generic(url, payload)
 
     def emit_mcp(
-        self, mcp: Union[MetadataChangeProposal, MetadataChangeProposalWrapper]
+            self, mcp: Union[MetadataChangeProposal, MetadataChangeProposalWrapper]
     ) -> None:
         url = f"{self._gms_server}/aspects?action=ingestProposal"
 
@@ -271,12 +306,18 @@ class DataHubRestEmitter(Closeable, Emitter):
         self._emit_generic(url, payload)
 
     def _emit_generic(self, url: str, payload: str) -> None:
+        """
+        构建 curl 命令
+        """
         curl_command = make_curl_command(self._session, "POST", url, payload)
         logger.debug(
             "Attempting to emit to DataHub GMS; using curl equivalent to:\n%s",
             curl_command,
         )
         try:
+            """
+            执行 http post 请求
+            """
             response = self._session.post(url, data=payload)
             response.raise_for_status()
         except HTTPError as e:

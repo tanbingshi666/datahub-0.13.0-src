@@ -31,7 +31,11 @@ RUN_TABLE_COLUMNS = ["urn", "aspect name", "created at"]
 
 @click.group(cls=DefaultGroup, default="run")
 def ingest() -> None:
-    """Ingest metadata into DataHub."""
+    """
+    Ingest metadata into DataHub
+    命令行参数 ingest 组 ingest 参考后面可以跟 -c/--config, -n/--dry-run 等
+    具体参考如下即可
+    """
     pass
 
 
@@ -111,23 +115,29 @@ def ingest() -> None:
     ]
 )
 def run(
-    config: str,
-    dry_run: bool,
-    preview: bool,
-    strict_warnings: bool,
-    preview_workunits: int,
-    test_source_connection: bool,
-    report_to: str,
-    no_default_report: bool,
-    no_spinner: bool,
-    no_progress: bool,
+        config: str,
+        dry_run: bool,
+        preview: bool,
+        strict_warnings: bool,
+        preview_workunits: int,
+        test_source_connection: bool,
+        report_to: str,
+        no_default_report: bool,
+        no_spinner: bool,
+        no_progress: bool,
 ) -> None:
-    """Ingest metadata into DataHub."""
+    """
+    Ingest metadata into DataHub
+    摄取元数据入口
+    """
 
     async def run_pipeline_to_completion(pipeline: Pipeline) -> int:
         logger.info("Starting metadata ingestion")
         with click_spinner.spinner(disable=no_spinner or no_progress):
             try:
+                """
+                执行摄取元数据
+                """
                 pipeline.run()
             except Exception as e:
                 logger.info(
@@ -146,6 +156,9 @@ def run(
     # main function begins
     logger.info("DataHub CLI version: %s", datahub_package.nice_version_name())
 
+    """
+    加载解析配置文件
+    """
     pipeline_config = load_config_file(
         config,
         squirrel_original_config=True,
@@ -155,8 +168,14 @@ def run(
         process_directives=True,
         resolve_env_vars=True,
     )
+    """
+    提取原始配置文件字符串内容
+    """
     raw_pipeline_config = pipeline_config.pop("__raw_config")
 
+    """
+    test_source_connection 默认 False
+    """
     if test_source_connection:
         _test_source_connection(report_to, pipeline_config)
 
@@ -167,6 +186,13 @@ def run(
         # loop, and hence the same thread.
 
         # logger.debug(f"Using config: {pipeline_config}")
+        """
+        创建 Pipline 对象 核心完成如下逻辑：
+        1 根据配置文件信息与 datahub gms server 测试连接
+        2 根据配置文件信息初始化 sink 类
+        3 根据配置文件信息初始化 source 类
+        4 根据配置文件信息初始化 transforms (可选)
+        """
         pipeline = Pipeline.create(
             pipeline_config,
             dry_run,
@@ -181,6 +207,10 @@ def run(
         version_stats_future = asyncio.ensure_future(
             upgrade.retrieve_version_stats(pipeline.ctx.graph)
         )
+
+        """
+        运行 Pipeline 直到成功 核心调用 run_pipeline_to_completion()
+        """
         ingestion_future = asyncio.ensure_future(run_pipeline_to_completion(pipeline))
         ret = await ingestion_future
 
@@ -197,6 +227,9 @@ def run(
 
         return ret
 
+    """
+    异步执行 run_ingestion_and_check_upgrade()
+    """
     loop = asyncio.get_event_loop()
     ret = loop.run_until_complete(run_ingestion_and_check_upgrade())
     if ret:
@@ -256,13 +289,13 @@ def run(
     default="UTC",
 )
 def deploy(
-    name: str,
-    config: str,
-    urn: Optional[str],
-    executor_id: str,
-    cli_version: Optional[str],
-    schedule: Optional[str],
-    time_zone: str,
+        name: str,
+        config: str,
+        urn: Optional[str],
+        executor_id: str,
+        cli_version: Optional[str],
+        schedule: Optional[str],
+        time_zone: str,
 ) -> None:
     """
     Deploy an ingestion recipe to your DataHub instance.
@@ -477,7 +510,7 @@ def list_runs(page_offset: int, page_size: int, include_soft_deletes: bool) -> N
 @upgrade.check_upgrade
 @telemetry.with_telemetry()
 def show(
-    run_id: str, start: int, count: int, include_soft_deletes: bool, show_aspect: bool
+        run_id: str, start: int, count: int, include_soft_deletes: bool, show_aspect: bool
 ) -> None:
     """Describe a provided ingestion run to datahub"""
     session, gms_host = cli_utils.get_session_and_host()
@@ -525,7 +558,7 @@ def show(
 @upgrade.check_upgrade
 @telemetry.with_telemetry()
 def rollback(
-    run_id: str, force: bool, dry_run: bool, safe: bool, report_dir: str
+        run_id: str, force: bool, dry_run: bool, safe: bool, report_dir: str
 ) -> None:
     """Rollback a provided ingestion run to datahub"""
 

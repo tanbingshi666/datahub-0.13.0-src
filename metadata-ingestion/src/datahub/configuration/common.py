@@ -34,7 +34,7 @@ REDACT_SUFFIXES = {
 
 def _should_redact_key(key: Union[str, int]) -> bool:
     return isinstance(key, str) and (
-        key in REDACT_KEYS or any(key.endswith(suffix) for suffix in REDACT_SUFFIXES)
+            key in REDACT_KEYS or any(key.endswith(suffix) for suffix in REDACT_SUFFIXES)
     )
 
 
@@ -102,9 +102,9 @@ class ConfigModel(BaseModel):
         if PYDANTIC_VERSION_2:
             try:
                 with unittest.mock.patch.dict(
-                    cls.model_config,  # type: ignore
-                    {"extra": "allow"},
-                    clear=False,
+                        cls.model_config,  # type: ignore
+                        {"extra": "allow"},
+                        clear=False,
                 ):
                     cls.model_rebuild(force=True)  # type: ignore
                     return cls.parse_obj(obj)

@@ -61,9 +61,9 @@ class ContainerKey(DatahubKey):
         bag = self.dict(by_alias=True, exclude_none=True, exclude={"env"})
 
         if (
-            self.backcompat_env_as_instance
-            and self.instance is None
-            and self.env is not None
+                self.backcompat_env_as_instance
+                and self.instance is None
+                and self.env is not None
         ):
             bag["instance"] = self.env
 
@@ -139,7 +139,7 @@ KeyType = TypeVar("KeyType", bound=ContainerKey)
 
 
 def add_domain_to_entity_wu(
-    entity_urn: str, domain_urn: str
+        entity_urn: str, domain_urn: str
 ) -> Iterable[MetadataWorkUnit]:
     yield MetadataChangeProposalWrapper(
         entityUrn=f"{entity_urn}",
@@ -148,7 +148,7 @@ def add_domain_to_entity_wu(
 
 
 def add_owner_to_entity_wu(
-    entity_type: str, entity_urn: str, owner_urn: str
+        entity_type: str, entity_urn: str, owner_urn: str
 ) -> Iterable[MetadataWorkUnit]:
     yield MetadataChangeProposalWrapper(
         entityUrn=f"{entity_urn}",
@@ -164,7 +164,7 @@ def add_owner_to_entity_wu(
 
 
 def add_tags_to_entity_wu(
-    entity_type: str, entity_urn: str, tags: List[str]
+        entity_type: str, entity_urn: str, tags: List[str]
 ) -> Iterable[MetadataWorkUnit]:
     yield MetadataChangeProposalWrapper(
         entityType=entity_type,
@@ -176,21 +176,28 @@ def add_tags_to_entity_wu(
 
 
 def gen_containers(
-    container_key: KeyType,
-    name: str,
-    sub_types: List[str],
-    parent_container_key: Optional[ContainerKey] = None,
-    extra_properties: Optional[Dict[str, str]] = None,
-    domain_urn: Optional[str] = None,
-    description: Optional[str] = None,
-    owner_urn: Optional[str] = None,
-    external_url: Optional[str] = None,
-    tags: Optional[List[str]] = None,
-    qualified_name: Optional[str] = None,
-    created: Optional[int] = None,
-    last_modified: Optional[int] = None,
+        container_key: KeyType,
+        name: str,
+        sub_types: List[str],
+        parent_container_key: Optional[ContainerKey] = None,
+        extra_properties: Optional[Dict[str, str]] = None,
+        domain_urn: Optional[str] = None,
+        description: Optional[str] = None,
+        owner_urn: Optional[str] = None,
+        external_url: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        qualified_name: Optional[str] = None,
+        created: Optional[int] = None,
+        last_modified: Optional[int] = None,
 ) -> Iterable[MetadataWorkUnit]:
+    """
+    容器的 URN (统一资源标识符)
+    """
     container_urn = container_key.as_urn()
+
+    """
+    容器属性
+    """
     yield MetadataChangeProposalWrapper(
         entityUrn=f"{container_urn}",
         # entityKeyAspect=ContainerKeyClass(guid=parent_container_key.guid()),
@@ -211,11 +218,17 @@ def gen_containers(
     ).as_workunit()
 
     # add status
+    """
+    状态类
+    """
     yield MetadataChangeProposalWrapper(
         entityUrn=f"{container_urn}",
         aspect=StatusClass(removed=False),
     ).as_workunit()
 
+    """
+    数据平台实例
+    """
     yield MetadataChangeProposalWrapper(
         entityUrn=f"{container_urn}",
         aspect=DataPlatformInstance(
@@ -227,17 +240,26 @@ def gen_containers(
     ).as_workunit()
 
     # Set subtype
+    """
+    子类型
+    """
     yield MetadataChangeProposalWrapper(
         entityUrn=f"{container_urn}",
         aspect=SubTypesClass(typeNames=sub_types),
     ).as_workunit()
 
+    """
+    域名 URN
+    """
     if domain_urn:
         yield from add_domain_to_entity_wu(
             entity_urn=container_urn,
             domain_urn=domain_urn,
         )
 
+    """
+    所有者 URN
+    """
     if owner_urn:
         yield from add_owner_to_entity_wu(
             entity_type="container",
@@ -245,6 +267,9 @@ def gen_containers(
             owner_urn=owner_urn,
         )
 
+    """
+    标签
+    """
     if tags:
         yield from add_tags_to_entity_wu(
             entity_type="container",
@@ -266,7 +291,7 @@ def gen_containers(
 
 
 def add_dataset_to_container(
-    container_key: KeyType, dataset_urn: str
+        container_key: KeyType, dataset_urn: str
 ) -> Iterable[MetadataWorkUnit]:
     container_urn = make_container_urn(
         guid=container_key.guid(),
@@ -279,7 +304,7 @@ def add_dataset_to_container(
 
 
 def add_entity_to_container(
-    container_key: KeyType, entity_type: str, entity_urn: str
+        container_key: KeyType, entity_type: str, entity_urn: str
 ) -> Iterable[MetadataWorkUnit]:
     container_urn = make_container_urn(
         guid=container_key.guid(),
@@ -292,7 +317,7 @@ def add_entity_to_container(
 
 
 def mcps_from_mce(
-    mce: MetadataChangeEventClass,
+        mce: MetadataChangeEventClass,
 ) -> Iterable[MetadataChangeProposalWrapper]:
     for aspect in mce.proposedSnapshot.aspects:
         yield MetadataChangeProposalWrapper(

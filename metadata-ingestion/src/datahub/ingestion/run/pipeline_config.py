@@ -87,7 +87,7 @@ class PipelineConfig(ConfigModel):
 
     @validator("run_id", pre=True, always=True)
     def run_id_should_be_semantic(
-        cls, v: Optional[str], values: Dict[str, Any], **kwargs: Any
+            cls, v: Optional[str], values: Dict[str, Any], **kwargs: Any
     ) -> str:
         if v == DEFAULT_RUN_ID:
             if "source" in values and hasattr(values["source"], "type"):
@@ -102,6 +102,10 @@ class PipelineConfig(ConfigModel):
 
     @root_validator(pre=True)
     def default_sink_is_datahub_rest(cls, values: Dict[str, Any]) -> Any:
+        """
+        values:Dict 也即配置文件内容
+        核心逻辑判断配置文件内容是否存在 sink 配置 如果不存在则从系统环境变量中获取拼接到 values
+        """
         if "sink" not in values:
             gms_host, gms_token = get_url_and_token()
             default_sink_config = {
@@ -121,7 +125,7 @@ class PipelineConfig(ConfigModel):
 
     @validator("datahub_api", always=True)
     def datahub_api_should_use_rest_sink_as_default(
-        cls, v: Optional[DatahubClientConfig], values: Dict[str, Any], **kwargs: Any
+            cls, v: Optional[DatahubClientConfig], values: Dict[str, Any], **kwargs: Any
     ) -> Optional[DatahubClientConfig]:
         if v is None and "sink" in values and hasattr(values["sink"], "type"):
             sink_type = values["sink"].type
@@ -132,8 +136,17 @@ class PipelineConfig(ConfigModel):
 
     @classmethod
     def from_dict(
-        cls, resolved_dict: dict, raw_dict: Optional[dict] = None
+            cls, resolved_dict: dict, raw_dict: Optional[dict] = None
     ) -> "PipelineConfig":
+        """
+        将 dict 对象解析为 PipelineConfig
+        resolved_dict 是被系统环境变量填充之后的 dict 对象
+        raw_dict 是原始配置文件的 dict 对象
+        由于 PipelineConfig 存在 @root_validator、 @validator 注解 因此会调用被装饰的方法
+        首先调用 @root_validator 注解的 default_sink_is_datahub_rest()
+        其次调用 @validator 注解的方法
+        (备注：被注解方法名称前缀一般跟字段名相关)
+        """
         config = cls.parse_obj(resolved_dict)
         config._raw_dict = raw_dict
         return config

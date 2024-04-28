@@ -89,7 +89,7 @@ def _process_directives(config: dict) -> dict:
             for k, v in obj.items():
                 if isinstance(k, str) and k.startswith(WRITE_TO_FILE_DIRECTIVE_PREFIX):
                     # This writes the value to a temporary file and replaces the value with the path to the file.
-                    config_option = k[len(WRITE_TO_FILE_DIRECTIVE_PREFIX) :]
+                    config_option = k[len(WRITE_TO_FILE_DIRECTIVE_PREFIX):]
 
                     with tempfile.NamedTemporaryFile("w", delete=False) as f:
                         filepath = f.name
@@ -107,13 +107,13 @@ def _process_directives(config: dict) -> dict:
 
 
 def load_config_file(
-    config_file: Union[str, pathlib.Path],
-    squirrel_original_config: bool = False,
-    squirrel_field: str = "__orig_config",
-    allow_stdin: bool = False,
-    allow_remote: bool = True,  # TODO: Change the default to False.
-    resolve_env_vars: bool = True,  # TODO: Change the default to False.
-    process_directives: bool = False,
+        config_file: Union[str, pathlib.Path],
+        squirrel_original_config: bool = False,
+        squirrel_field: str = "__orig_config",
+        allow_stdin: bool = False,
+        allow_remote: bool = True,  # TODO: Change the default to False.
+        resolve_env_vars: bool = True,  # TODO: Change the default to False.
+        process_directives: bool = False,
 ) -> dict:
     config_mech: ConfigurationMechanism
     if allow_stdin and config_file == "-":
@@ -122,8 +122,14 @@ def load_config_file(
         config_mech = YamlConfigurationMechanism()
         raw_config_file = sys.stdin.read()
     else:
+        """
+        正常情况下编写的 ingest 文件都是 yaml/yml 格式
+        """
         config_file_path = pathlib.Path(config_file)
         if config_file_path.suffix in {".yaml", ".yml"}:
+            """
+            创建 YAML 格式的对象 YamlConfigurationMechanism 专门解析 YAML 文件格式
+            """
             config_mech = YamlConfigurationMechanism()
         elif config_file_path.suffix == ".json":
             config_mech = JsonConfigurationMechanism()
@@ -134,10 +140,13 @@ def load_config_file(
                 f"Only .toml, .yml, and .json are supported. Cannot process file type {config_file_path.suffix}"
             )
 
+        """
+        解析配置文件的 schema
+        """
         url_parsed = parse.urlparse(str(config_file))
         if allow_remote and url_parsed.scheme in (
-            "http",
-            "https",
+                "http",
+                "https",
         ):  # URLs will return http/https
             # If the URL is remote, we need to fetch it.
             try:
@@ -150,17 +159,41 @@ def load_config_file(
         else:
             if not config_file_path.is_file():
                 raise ConfigurationError(f"Cannot open config file {config_file_path}")
+            """
+            读取配置文件的内容为字符串
+            """
             raw_config_file = config_file_path.read_text()
 
+    """
+    配置文件内容字符串转为 IO
+    """
     config_fp = io.StringIO(raw_config_file)
+    """
+    解析配置文件内容
+    场景驱动情况下 调用 YamlConfigurationMechanism.load_config() 解析配置文件内容为 dict 对象
+    """
     raw_config = config_mech.load_config(config_fp)
 
+    """
+    拷贝字段 dict 对象
+    """
     config = raw_config.copy()
     if resolve_env_vars:
+        """
+        如果配置文件依赖于系统环境变量 则需要填充
+        """
         config = resolve_env_variables(config, environ=os.environ)
     if process_directives:
         config = _process_directives(config)
 
+    """
+    如果 squirrel_original_config = True 则往 config dict 对象添加对应的 KV
+    场景驱动情况下 squirrel_original_config = True, squirrel_field = '__raw_config'
+    """
     if squirrel_original_config:
         config[squirrel_field] = raw_config
+
+    """
+    返回解析配置文件对应的 dict 对象
+    """
     return config

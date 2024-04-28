@@ -55,8 +55,8 @@ class DatahubIngestionRunSummaryProvider(PipelineRunListener):
         if pipeline_config.pipeline_name:
             key["pipeline_name"] = pipeline_config.pipeline_name
         if (
-            pipeline_config.source.config
-            and "platform_instance" in pipeline_config.source.config
+                pipeline_config.source.config
+                and "platform_instance" in pipeline_config.source.config
         ):
             key["platform_instance"] = pipeline_config.source.config[
                 "platform_instance"
@@ -76,21 +76,30 @@ class DatahubIngestionRunSummaryProvider(PipelineRunListener):
 
     @classmethod
     def create(
-        cls,
-        config_dict: Dict[str, Any],
-        ctx: PipelineContext,
+            cls,
+            config_dict: Dict[str, Any],
+            ctx: PipelineContext,
     ) -> PipelineRunListener:
         sink_config_holder: Optional[DynamicTypedConfig] = None
 
+        """
+        reported 配置信息
+        """
         reporter_config = DatahubIngestionRunSummaryProviderConfig.parse_obj(
             config_dict or {}
         )
         if reporter_config.sink:
             sink_config_holder = reporter_config.sink
 
+        """
+        默认情况下 sink_config_holder 等于 None
+        """
         if sink_config_holder is None:
             # Populate sink from global recipe
             assert ctx.pipeline_config
+            """
+            将 sink 配置重新赋值为 sink_config_holder
+            """
             sink_config_holder = ctx.pipeline_config.sink
             # Global instances are safe to use only if the types are datahub-rest and datahub-kafka
             # Re-using a shared file sink will result in clobbering the events
@@ -99,6 +108,9 @@ class DatahubIngestionRunSummaryProvider(PipelineRunListener):
                     f"Datahub ingestion reporter will be disabled because sink type {sink_config_holder.type} is not supported"
                 )
 
+        """
+        根据 sink 配置创建具体的类
+        """
         sink_type = sink_config_holder.type
         sink_class = sink_registry.get(sink_type)
         sink_config = sink_config_holder.dict().get("config") or {}
@@ -107,29 +119,57 @@ class DatahubIngestionRunSummaryProvider(PipelineRunListener):
             # regardless of the default sink config since that makes it
             # immune to process shutdown related failures
             sink_config["mode"] = "SYNC"
-
         sink: Sink = sink_class.create(sink_config, ctx)
+
+        """
+        实例化 DatahubIngestionRunSummaryProvider
+        """
         return cls(sink, reporter_config.report_recipe, ctx)
 
     def __init__(self, sink: Sink, report_recipe: bool, ctx: PipelineContext) -> None:
         assert ctx.pipeline_config is not None
 
+        """
+        sink 实例对象
+        场景驱动下 sink = DatahubRestSink
+        """
         self.sink: Sink = sink
+        """
+        默认情况下 report_recipe = True
+        """
         self.report_recipe = report_recipe
+        """
+        生成唯一的键
+        一般情况下 ingestion_source_key = {type:${source_type}}
+        """
         ingestion_source_key = self.generate_unique_key(ctx.pipeline_config)
+        """
+        生成实体名称
+        """
         self.entity_name: str = self.generate_entity_name(ingestion_source_key)
 
+        """
+        生成 source 的 URN (统一资源名称)
+        """
         self.ingestion_source_urn: Urn = Urn(
             entity_type="dataHubIngestionSource",
             entity_id=["cli-" + datahub_guid(ingestion_source_key)],
         )
         logger.debug(f"Ingestion source urn = {self.ingestion_source_urn}")
+
         self.execution_request_input_urn: Urn = Urn(
             entity_type="dataHubExecutionRequest", entity_id=[ctx.run_id]
         )
+
+        """
+        记录开始时间戳
+        """
         self.start_time_ms: int = self.get_cur_time_in_ms()
 
         # Construct the dataHubIngestionSourceInfo aspect
+        """
+        构建 dataHubIngestionSourceInfo 切面
+        """
         source_info_aspect = DataHubIngestionSourceInfoClass(
             name=self.entity_name,
             type=ctx.pipeline_config.source.type,
@@ -144,6 +184,9 @@ class DatahubIngestionRunSummaryProvider(PipelineRunListener):
         )
 
         # Emit the dataHubIngestionSourceInfo aspect
+        """
+        向 datahub gms server 发送 dataHubIngestionSourceInfo 切面信息
+        """
         self._emit_aspect(
             entity_urn=self.ingestion_source_urn,
             aspect_value=source_info_aspect,
@@ -157,6 +200,9 @@ class DatahubIngestionRunSummaryProvider(PipelineRunListener):
             return json.dumps(redact_raw_config(ctx.pipeline_config._raw_dict))
 
     def _emit_aspect(self, entity_urn: Urn, aspect_value: _Aspect) -> None:
+        """
+        异步发送切面信息
+        """
         self.sink.write_record_async(
             RecordEnvelope(
                 record=MetadataChangeProposalWrapper(
@@ -171,6 +217,9 @@ class DatahubIngestionRunSummaryProvider(PipelineRunListener):
     def on_start(self, ctx: PipelineContext) -> None:
         assert ctx.pipeline_config is not None
         # Construct the dataHubExecutionRequestInput aspect
+        """
+        构建 dataHubExecutionRequestInput 切面
+        """
         execution_input_aspect = ExecutionRequestInputClass(
             task=self._INGESTION_TASK_NAME,
             args={
@@ -184,17 +233,21 @@ class DatahubIngestionRunSummaryProvider(PipelineRunListener):
                 ingestionSource=str(self.ingestion_source_urn),
             ),
         )
+
         # Emit the dataHubExecutionRequestInput aspect
+        """
+        向 datahub gms 发送 dataHubExecutionRequestInput 切面信息
+        """
         self._emit_aspect(
             entity_urn=self.execution_request_input_urn,
             aspect_value=execution_input_aspect,
         )
 
     def on_completion(
-        self,
-        status: str,
-        report: Dict[str, Any],
-        ctx: PipelineContext,
+            self,
+            status: str,
+            report: Dict[str, Any],
+            ctx: PipelineContext,
     ) -> None:
         # Prepare a nicely formatted summary
         structured_report_str = json.dumps(report, indent=2)

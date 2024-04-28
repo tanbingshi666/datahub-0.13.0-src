@@ -49,6 +49,9 @@ class WorkUnitRecordExtractor(
             ]
         ]
     ]:
+        """
+        一般情况下 ingestion metadata 都被封装为 MetadataWorkUnit
+        """
         if isinstance(workunit, MetadataWorkUnit):
             if self.config.unpack_mces_into_mcps and isinstance(
                 workunit.metadata, MetadataChangeEvent

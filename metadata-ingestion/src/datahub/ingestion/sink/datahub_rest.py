@@ -78,6 +78,10 @@ class DatahubRestSink(Sink[DatahubRestSinkConfig, DataHubRestSinkReport]):
     treat_errors_as_warnings: bool = False
 
     def __post_init__(self) -> None:
+        """
+        实例化 DatahubRestEmitter
+        核心开启一个 request session
+        """
         self.emitter = DatahubRestEmitter(
             self.config.server,
             self.config.token,
@@ -91,6 +95,36 @@ class DatahubRestSink(Sink[DatahubRestSinkConfig, DataHubRestSinkReport]):
             disable_ssl_verification=self.config.disable_ssl_verification,
         )
         try:
+            """
+            向 gms 服务发送一个 http 请求获取 gms 配置 样例数据如下:
+            {
+                "models": {},
+                "patchCapable": true,
+                "versions": {
+                    "linkedin/datahub": {
+                        "version": "v0.13.0",
+                        "commit": "93febbbcdc4a2ec65495b1585339e78530bb0904"
+                    }
+                },
+                "managedIngestion": {
+                    "defaultCliVersion": "0.13.0",
+                    "enabled": true
+                },
+                "statefulIngestionCapable": true,
+                "supportsImpactAnalysis": true,
+                "timeZone": "GMT",
+                "telemetry": {
+                    "enabledCli": true,
+                    "enabledIngestion": false
+                },
+                "datasetUrnNameCasing": false,
+                "retention": "true",
+                "datahub": {
+                    "serverType": "quickstart"
+                },
+                "noCode": "true"
+            }
+            """
             gms_config = self.emitter.test_connection()
         except Exception as exc:
             raise ConfigurationError(
@@ -103,11 +137,16 @@ class DatahubRestSink(Sink[DatahubRestSinkConfig, DataHubRestSinkReport]):
             .get("linkedin/datahub", {})
             .get("version", "")
         )
+
         self.report.max_threads = self.config.max_threads
         logger.debug("Setting env variables to override config")
         set_env_variables_override_config(self.config.server, self.config.token)
         logger.debug("Setting gms config")
         set_gms_config(gms_config)
+
+        """
+        封装了线程池
+        """
         self.executor = PartitionExecutor(
             max_workers=self.config.max_threads,
             max_pending=self.config.max_pending_requests,
@@ -121,10 +160,10 @@ class DatahubRestSink(Sink[DatahubRestSinkConfig, DataHubRestSinkReport]):
         pass
 
     def _write_done_callback(
-        self,
-        record_envelope: RecordEnvelope,
-        write_callback: WriteCallback,
-        future: concurrent.futures.Future,
+            self,
+            record_envelope: RecordEnvelope,
+            write_callback: WriteCallback,
+            future: concurrent.futures.Future,
     ) -> None:
         self.report.pending_requests -= 1
         if future.cancelled():
@@ -146,8 +185,8 @@ class DatahubRestSink(Sink[DatahubRestSinkConfig, DataHubRestSinkReport]):
                             e.info["stackTrace"].split("\n")[:3]
                         )
                         e.info["message"] = e.info.get("message", "").split("\n")[0][
-                            :200
-                        ]
+                                            :200
+                                            ]
 
                 # Include information about the entity that failed.
                 record_urn = _get_urn(record_envelope)
@@ -164,28 +203,37 @@ class DatahubRestSink(Sink[DatahubRestSinkConfig, DataHubRestSinkReport]):
                 write_callback.on_failure(record_envelope, Exception(e), {})
 
     def _emit_wrapper(
-        self,
-        record: Union[
-            MetadataChangeEvent,
-            MetadataChangeProposal,
-            MetadataChangeProposalWrapper,
-        ],
-    ) -> None:
-        # TODO: Add timing metrics
-        self.emitter.emit(record)
-
-    def write_record_async(
-        self,
-        record_envelope: RecordEnvelope[
-            Union[
+            self,
+            record: Union[
                 MetadataChangeEvent,
                 MetadataChangeProposal,
                 MetadataChangeProposalWrapper,
-            ]
-        ],
-        write_callback: WriteCallback,
+            ],
     ) -> None:
+        # TODO: Add timing metrics
+        """
+        发送 record 数据
+        """
+        self.emitter.emit(record)
+
+    def write_record_async(
+            self,
+            record_envelope: RecordEnvelope[
+                Union[
+                    MetadataChangeEvent,
+                    MetadataChangeProposal,
+                    MetadataChangeProposalWrapper,
+                ]
+            ],
+            write_callback: WriteCallback,
+    ) -> None:
+        """
+        发送信息数据
+        """
         record = record_envelope.record
+        """
+        异步发送
+        """
         if self.config.mode == SyncOrAsync.ASYNC:
             partition_key = _get_partition_key(record_envelope)
             self.executor.submit(
@@ -199,6 +247,9 @@ class DatahubRestSink(Sink[DatahubRestSinkConfig, DataHubRestSinkReport]):
             self.report.pending_requests += 1
         else:
             # execute synchronously
+            """
+            同步发送
+            """
             try:
                 self._emit_wrapper(record)
                 write_callback.on_success(record_envelope, success_metadata={})

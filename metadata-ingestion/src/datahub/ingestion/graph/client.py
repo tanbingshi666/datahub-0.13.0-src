@@ -56,7 +56,6 @@ if TYPE_CHECKING:
     )
     from datahub.sql_parsing.sqlglot_lineage import SqlParsingResult
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -102,14 +101,20 @@ def _graphql_entity_type(entity_type: str) -> str:
 
     # Strip the "DATA_HUB_" prefix.
     if entity_type.startswith("DATA_HUB_"):
-        entity_type = entity_type[len("DATA_HUB_") :]
+        entity_type = entity_type[len("DATA_HUB_"):]
 
     return entity_type
 
 
 class DataHubGraph(DatahubRestEmitter):
     def __init__(self, config: DatahubClientConfig) -> None:
+        """
+        config 维护了连接 datahub 的信息 比如 server
+        """
         self.config = config
+        """
+        调用其父类 __init__()
+        """
         super().__init__(
             gms_server=self.config.server,
             token=self.config.token,
@@ -122,15 +127,24 @@ class DataHubGraph(DatahubRestEmitter):
             client_certificate_path=self.config.client_certificate_path,
             disable_ssl_verification=self.config.disable_ssl_verification,
         )
+        """
+        测试连接 datahub gms server 也即发送 get http://localhost:8080/config
+        """
         self.test_connection()
 
         # Cache the server id for telemetry.
+        """
+        通过 telemetry 缓存 server id
+        """
         from datahub.telemetry.telemetry import telemetry_instance
 
         if not telemetry_instance.enabled:
             self.server_id = "missing"
             return
         try:
+            """
+            向 datahub gms server 发送一个 get 请求获取 client id
+            """
             client_id: Optional[TelemetryClientIdClass] = self.get_aspect(
                 "urn:li:telemetry:clientId", TelemetryClientIdClass
             )
@@ -180,10 +194,10 @@ class DataHubGraph(DatahubRestEmitter):
         return self._send_restli_request("POST", url, json=payload_dict)
 
     def get_aspect(
-        self,
-        entity_urn: str,
-        aspect_type: Type[Aspect],
-        version: int = 0,
+            self,
+            entity_urn: str,
+            aspect_type: Type[Aspect],
+            version: int = 0,
     ) -> Optional[Aspect]:
         """
         Get an aspect for an entity.
@@ -228,12 +242,12 @@ class DataHubGraph(DatahubRestEmitter):
 
     @deprecated(reason="Use get_aspect instead which makes aspect string name optional")
     def get_aspect_v2(
-        self,
-        entity_urn: str,
-        aspect_type: Type[Aspect],
-        aspect: str,
-        aspect_type_name: Optional[str] = None,
-        version: int = 0,
+            self,
+            entity_urn: str,
+            aspect_type: Type[Aspect],
+            aspect: str,
+            aspect_type_name: Optional[str] = None,
+            version: int = 0,
     ) -> Optional[Aspect]:
         assert aspect_type.ASPECT_NAME == aspect
         return self.get_aspect(
@@ -255,7 +269,7 @@ class DataHubGraph(DatahubRestEmitter):
         return self.get_aspect(entity_urn=entity_urn, aspect_type=DomainPropertiesClass)
 
     def get_dataset_properties(
-        self, entity_urn: str
+            self, entity_urn: str
     ) -> Optional[DatasetPropertiesClass]:
         return self.get_aspect(
             entity_urn=entity_urn, aspect_type=DatasetPropertiesClass
@@ -277,7 +291,7 @@ class DataHubGraph(DatahubRestEmitter):
         )
 
     def get_usage_aspects_from_urn(
-        self, entity_urn: str, start_timestamp: int, end_timestamp: int
+            self, entity_urn: str, start_timestamp: int, end_timestamp: int
     ) -> Optional[List[DatasetUsageStatisticsClass]]:
         payload = {
             "urn": entity_urn,
@@ -313,7 +327,7 @@ class DataHubGraph(DatahubRestEmitter):
         return None
 
     def list_all_entity_urns(
-        self, entity_type: str, start: int, count: int
+            self, entity_type: str, start: int, count: int
     ) -> Optional[List[str]]:
         url = f"{self._gms_server}/entities?action=listUrns"
         payload = {"entity": entity_type, "start": start, "count": count}
@@ -337,10 +351,10 @@ class DataHubGraph(DatahubRestEmitter):
             return None
 
     def get_latest_timeseries_value(
-        self,
-        entity_urn: str,
-        aspect_type: Type[Aspect],
-        filter_criteria_map: Dict[str, str],
+            self,
+            entity_urn: str,
+            aspect_type: Type[Aspect],
+            filter_criteria_map: Dict[str, str],
     ) -> Optional[Aspect]:
         filter_criteria = [
             {"field": k, "value": v, "condition": "EQUAL"}
@@ -368,7 +382,7 @@ class DataHubGraph(DatahubRestEmitter):
         return None
 
     def get_entity_raw(
-        self, entity_urn: str, aspects: Optional[List[str]] = None
+            self, entity_urn: str, aspects: Optional[List[str]] = None
     ) -> Dict:
         endpoint: str = f"{self.config.server}/entitiesV2/{Urn.url_encode(entity_urn)}"
         if aspects is not None:
@@ -383,10 +397,10 @@ class DataHubGraph(DatahubRestEmitter):
         reason="Use get_aspect for a single aspect or get_entity_semityped for a full entity."
     )
     def get_aspects_for_entity(
-        self,
-        entity_urn: str,
-        aspects: List[str],
-        aspect_types: List[Type[Aspect]],
+            self,
+            entity_urn: str,
+            aspects: List[str],
+            aspect_types: List[Type[Aspect]],
     ) -> Dict[str, Optional[Aspect]]:
         """
         Get multiple aspects for an entity.
@@ -506,9 +520,9 @@ class DataHubGraph(DatahubRestEmitter):
         reason='Use get_urns_by_filter(entity_types=["container"], ...) instead'
     )
     def get_container_urns_by_filter(
-        self,
-        env: Optional[str] = None,
-        search_query: str = "*",
+            self,
+            env: Optional[str] = None,
+            search_query: str = "*",
     ) -> Iterable[str]:
         """Return container urns that match based on query"""
         url = self._search_endpoint
@@ -550,16 +564,16 @@ class DataHubGraph(DatahubRestEmitter):
             yield x["entity"]
 
     def _bulk_fetch_schema_info_by_filter(
-        self,
-        *,
-        platform: Optional[str] = None,
-        platform_instance: Optional[str] = None,
-        env: Optional[str] = None,
-        query: Optional[str] = None,
-        container: Optional[str] = None,
-        status: RemovedStatusFilter = RemovedStatusFilter.NOT_SOFT_DELETED,
-        batch_size: int = 100,
-        extraFilters: Optional[List[SearchFilterRule]] = None,
+            self,
+            *,
+            platform: Optional[str] = None,
+            platform_instance: Optional[str] = None,
+            env: Optional[str] = None,
+            query: Optional[str] = None,
+            container: Optional[str] = None,
+            status: RemovedStatusFilter = RemovedStatusFilter.NOT_SOFT_DELETED,
+            batch_size: int = 100,
+            extraFilters: Optional[List[SearchFilterRule]] = None,
     ) -> Iterable[Tuple[str, "GraphQLSchemaMetadata"]]:
         """Fetch schema info for datasets that match all of the given filters.
 
@@ -625,17 +639,17 @@ class DataHubGraph(DatahubRestEmitter):
                 yield entity["urn"], entity["schemaMetadata"]
 
     def get_urns_by_filter(
-        self,
-        *,
-        entity_types: Optional[List[str]] = None,
-        platform: Optional[str] = None,
-        platform_instance: Optional[str] = None,
-        env: Optional[str] = None,
-        query: Optional[str] = None,
-        container: Optional[str] = None,
-        status: RemovedStatusFilter = RemovedStatusFilter.NOT_SOFT_DELETED,
-        batch_size: int = 10000,
-        extraFilters: Optional[List[SearchFilterRule]] = None,
+            self,
+            *,
+            entity_types: Optional[List[str]] = None,
+            platform: Optional[str] = None,
+            platform_instance: Optional[str] = None,
+            env: Optional[str] = None,
+            query: Optional[str] = None,
+            container: Optional[str] = None,
+            status: RemovedStatusFilter = RemovedStatusFilter.NOT_SOFT_DELETED,
+            batch_size: int = 10000,
+            extraFilters: Optional[List[SearchFilterRule]] = None,
     ) -> Iterable[str]:
         """Fetch all urns that match all of the given filters.
 
@@ -710,7 +724,7 @@ class DataHubGraph(DatahubRestEmitter):
             yield entity["urn"]
 
     def _scroll_across_entities(
-        self, graphql_query: str, variables_orig: dict
+            self, graphql_query: str, variables_orig: dict
     ) -> Iterable[dict]:
         variables = variables_orig.copy()
         first_iter = True
@@ -745,7 +759,7 @@ class DataHubGraph(DatahubRestEmitter):
         return types
 
     def get_latest_pipeline_checkpoint(
-        self, pipeline_name: str, platform: str
+            self, pipeline_name: str, platform: str
     ) -> Optional[Checkpoint["GenericCheckpointState"]]:
         from datahub.ingestion.source.state.entity_removal_state import (
             GenericCheckpointState,
@@ -773,7 +787,7 @@ class DataHubGraph(DatahubRestEmitter):
         )
 
     def get_search_results(
-        self, start: int = 0, count: int = 1, entity: str = "dataset"
+            self, start: int = 0, count: int = 1, entity: str = "dataset"
     ) -> Dict:
         search_body = {"input": "*", "entity": entity, "start": start, "count": count}
         results: Dict = self._post_generic(self._search_endpoint, search_body)
@@ -812,10 +826,10 @@ class DataHubGraph(DatahubRestEmitter):
         OUTGOING = "OUTGOING"
 
     def get_related_entities(
-        self,
-        entity_urn: str,
-        relationship_types: List[str],
-        direction: RelationshipDirection,
+            self,
+            entity_urn: str,
+            relationship_types: List[str],
+            direction: RelationshipDirection,
     ) -> Iterable[RelatedEntity]:
         relationship_endpoint = self._relationships_endpoint
         done = False
@@ -859,10 +873,10 @@ class DataHubGraph(DatahubRestEmitter):
             raise
 
     def soft_delete_entity(
-        self,
-        urn: str,
-        run_id: str = "__datahub-graph-client",
-        deletion_timestamp: Optional[int] = None,
+            self,
+            urn: str,
+            run_id: str = "__datahub-graph-client",
+            deletion_timestamp: Optional[int] = None,
     ) -> None:
         """Soft-delete an entity by urn.
 
@@ -884,8 +898,8 @@ class DataHubGraph(DatahubRestEmitter):
         )
 
     def hard_delete_entity(
-        self,
-        urn: str,
+            self,
+            urn: str,
     ) -> Tuple[int, int]:
         """Hard delete an entity by urn.
 
@@ -927,11 +941,11 @@ class DataHubGraph(DatahubRestEmitter):
     # TODO: Create hard_delete_aspect once we support that in GMS.
 
     def hard_delete_timeseries_aspect(
-        self,
-        urn: str,
-        aspect_name: str,
-        start_time: Optional[datetime],
-        end_time: Optional[datetime],
+            self,
+            urn: str,
+            aspect_name: str,
+            start_time: Optional[datetime],
+            end_time: Optional[datetime],
     ) -> int:
         """Hard delete timeseries aspects of an entity.
 
@@ -965,7 +979,7 @@ class DataHubGraph(DatahubRestEmitter):
         return timeseries_rows_affected
 
     def delete_references_to_urn(
-        self, urn: str, dry_run: bool = False
+            self, urn: str, dry_run: bool = False
     ) -> Tuple[int, List[Dict]]:
         """Delete references to a given entity.
 
@@ -997,11 +1011,11 @@ class DataHubGraph(DatahubRestEmitter):
 
     @functools.lru_cache()
     def _make_schema_resolver(
-        self,
-        platform: str,
-        platform_instance: Optional[str],
-        env: str,
-        include_graph: bool = True,
+            self,
+            platform: str,
+            platform_instance: Optional[str],
+            env: str,
+            include_graph: bool = True,
     ) -> "SchemaResolver":
         from datahub.sql_parsing.schema_resolver import SchemaResolver
 
@@ -1013,7 +1027,7 @@ class DataHubGraph(DatahubRestEmitter):
         )
 
     def initialize_schema_resolver_from_datahub(
-        self, platform: str, platform_instance: Optional[str], env: str
+            self, platform: str, platform_instance: Optional[str], env: str
     ) -> "SchemaResolver":
         logger.info("Initializing schema resolver")
         schema_resolver = self._make_schema_resolver(
@@ -1024,9 +1038,9 @@ class DataHubGraph(DatahubRestEmitter):
         count = 0
         with PerfTimer() as timer:
             for urn, schema_info in self._bulk_fetch_schema_info_by_filter(
-                platform=platform,
-                platform_instance=platform_instance,
-                env=env,
+                    platform=platform,
+                    platform_instance=platform_instance,
+                    env=env,
             ):
                 try:
                     schema_resolver.add_graphql_schema_metadata(urn, schema_info)
@@ -1046,14 +1060,14 @@ class DataHubGraph(DatahubRestEmitter):
         return schema_resolver
 
     def parse_sql_lineage(
-        self,
-        sql: str,
-        *,
-        platform: str,
-        platform_instance: Optional[str] = None,
-        env: str = DEFAULT_ENV,
-        default_db: Optional[str] = None,
-        default_schema: Optional[str] = None,
+            self,
+            sql: str,
+            *,
+            platform: str,
+            platform_instance: Optional[str] = None,
+            env: str = DEFAULT_ENV,
+            default_db: Optional[str] = None,
+            default_schema: Optional[str] = None,
     ) -> "SqlParsingResult":
         from datahub.sql_parsing.sqlglot_lineage import sqlglot_lineage
 

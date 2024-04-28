@@ -46,16 +46,16 @@ class SinkReport(Report):
 class WriteCallback(metaclass=ABCMeta):
     @abstractmethod
     def on_success(
-        self, record_envelope: RecordEnvelope, success_metadata: dict
+            self, record_envelope: RecordEnvelope, success_metadata: dict
     ) -> None:
         pass
 
     @abstractmethod
     def on_failure(
-        self,
-        record_envelope: RecordEnvelope,
-        failure_exception: Exception,
-        failure_metadata: dict,
+            self,
+            record_envelope: RecordEnvelope,
+            failure_exception: Exception,
+            failure_metadata: dict,
     ) -> None:
         pass
 
@@ -64,15 +64,15 @@ class NoopWriteCallback(WriteCallback):
     """Convenience WriteCallback class to support noop"""
 
     def on_success(
-        self, record_envelope: RecordEnvelope, success_metadata: dict
+            self, record_envelope: RecordEnvelope, success_metadata: dict
     ) -> None:
         pass
 
     def on_failure(
-        self,
-        record_envelope: RecordEnvelope,
-        failure_exception: Exception,
-        failure_metadata: dict,
+            self,
+            record_envelope: RecordEnvelope,
+            failure_exception: Exception,
+            failure_metadata: dict,
     ) -> None:
         pass
 
@@ -102,10 +102,19 @@ class Sink(Generic[SinkConfig, SinkReportType], Closeable, metaclass=ABCMeta):
         return cast(Type[SinkReportType], report_class)
 
     def __init__(self, ctx: PipelineContext, config: SinkConfig):
+        """
+        Pipeline 上下文
+        """
         self.ctx = ctx
+        """
+        sink 配置
+        """
         self.config = config
         self.report = self.get_report_class()()
 
+        """
+        场景驱动下 调用其子类 DatahubRestSink __post_init__()
+        """
         self.__post_init__()
 
     def __post_init__(self) -> None:
@@ -113,6 +122,9 @@ class Sink(Generic[SinkConfig, SinkReportType], Closeable, metaclass=ABCMeta):
 
     @classmethod
     def create(cls: Type[Self], config_dict: dict, ctx: PipelineContext) -> "Self":
+        """
+        实例化 Sink 对象 调用其 __init__()
+        """
         return cls(ctx, cls.get_config_class().parse_obj(config_dict))
 
     def handle_work_unit_start(self, workunit: WorkUnit) -> None:
@@ -123,7 +135,7 @@ class Sink(Generic[SinkConfig, SinkReportType], Closeable, metaclass=ABCMeta):
 
     @abstractmethod
     def write_record_async(
-        self, record_envelope: RecordEnvelope, write_callback: WriteCallback
+            self, record_envelope: RecordEnvelope, write_callback: WriteCallback
     ) -> None:
         # must call callback when done.
         pass

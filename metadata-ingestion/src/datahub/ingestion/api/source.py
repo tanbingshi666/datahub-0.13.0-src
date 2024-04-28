@@ -198,8 +198,8 @@ class Source(Closeable, metaclass=ABCMeta):
         """
         browse_path_processor: Optional[MetadataWorkUnitProcessor] = None
         if (
-            self.ctx.pipeline_config
-            and self.ctx.pipeline_config.flags.generate_browse_path_v2
+                self.ctx.pipeline_config
+                and self.ctx.pipeline_config.flags.generate_browse_path_v2
         ):
             browse_path_processor = self._get_browse_path_processor(
                 self.ctx.pipeline_config.flags.generate_browse_path_v2_dry_run
@@ -207,24 +207,24 @@ class Source(Closeable, metaclass=ABCMeta):
 
         auto_lowercase_dataset_urns: Optional[MetadataWorkUnitProcessor] = None
         if (
-            self.ctx.pipeline_config
-            and self.ctx.pipeline_config.source
-            and self.ctx.pipeline_config.source.config
-            and (
+                self.ctx.pipeline_config
+                and self.ctx.pipeline_config.source
+                and self.ctx.pipeline_config.source.config
+                and (
                 (
-                    hasattr(
-                        self.ctx.pipeline_config.source.config,
-                        "convert_urns_to_lowercase",
-                    )
-                    and self.ctx.pipeline_config.source.config.convert_urns_to_lowercase
+                        hasattr(
+                            self.ctx.pipeline_config.source.config,
+                            "convert_urns_to_lowercase",
+                        )
+                        and self.ctx.pipeline_config.source.config.convert_urns_to_lowercase
                 )
                 or (
-                    hasattr(self.ctx.pipeline_config.source.config, "get")
-                    and self.ctx.pipeline_config.source.config.get(
-                        "convert_urns_to_lowercase"
-                    )
+                        hasattr(self.ctx.pipeline_config.source.config, "get")
+                        and self.ctx.pipeline_config.source.config.get(
+                    "convert_urns_to_lowercase"
                 )
-            )
+                )
+        )
         ):
             auto_lowercase_dataset_urns = auto_lowercase_urns
 
@@ -238,8 +238,8 @@ class Source(Closeable, metaclass=ABCMeta):
 
     @staticmethod
     def _apply_workunit_processors(
-        workunit_processors: Sequence[Optional[MetadataWorkUnitProcessor]],
-        stream: Iterable[MetadataWorkUnit],
+            workunit_processors: Sequence[Optional[MetadataWorkUnitProcessor]],
+            stream: Iterable[MetadataWorkUnit],
     ) -> Iterable[MetadataWorkUnit]:
         for processor in workunit_processors:
             if processor is not None:
@@ -247,8 +247,15 @@ class Source(Closeable, metaclass=ABCMeta):
         return stream
 
     def get_workunits(self) -> Iterable[MetadataWorkUnit]:
+        """
+        一般情况下执行顺序为
+        1 get_workunits_internal()     执行拉取第三方元数据信息 (比如 MySQL)
+        2 get_workunit_processors()    拉取元数据信息之后可能需要进行处理器执行
+        3 _apply_workunit_processors() 执行处理器
+        """
         return self._apply_workunit_processors(
-            self.get_workunit_processors(), self.get_workunits_internal()
+            self.get_workunit_processors(),
+            self.get_workunits_internal()
         )
 
     def get_workunits_internal(self) -> Iterable[MetadataWorkUnit]:

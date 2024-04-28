@@ -76,6 +76,9 @@ class MySQLSource(TwoTierSQLAlchemySource):
     """
 
     def __init__(self, config, ctx):
+        """
+        调用其父类 __init__()
+        """
         super().__init__(config, ctx, self.get_platform())
 
     def get_platform(self):
@@ -83,15 +86,32 @@ class MySQLSource(TwoTierSQLAlchemySource):
 
     @classmethod
     def create(cls, config_dict, ctx):
+        """
+        mysql 配置转换为对象
+        """
         config = MySQLConfig.parse_obj(config_dict)
+        """
+        实例化 MySQLSource 调用其 __init__()
+        """
         return cls(config, ctx)
 
     def add_profile_metadata(self, inspector: Inspector) -> None:
         if not self.config.is_profiling_enabled():
             return
+        """
+        执行 SELECT table_schema, table_name, data_length from information_schema.tables 语句拉取 profile metadata 数据
+        比如返回结果如下：
+        TABLE_SCHEMA: tpc_h
+        TABLE_NAME: supplier
+        DATA_LENGTH: 16384
+        *************************** 454. row ***************************
+        TABLE_SCHEMA: tpc_h
+        TABLE_NAME: customer
+        DATA_LENGTH: 16384
+        """
         with inspector.engine.connect() as conn:
             for row in conn.execute(
-                "SELECT table_schema, table_name, data_length from information_schema.tables"
+                    "SELECT table_schema, table_name, data_length from information_schema.tables"
             ):
                 self.profile_metadata_info.dataset_name_to_storage_bytes[
                     f"{row.TABLE_SCHEMA}.{row.TABLE_NAME}"
