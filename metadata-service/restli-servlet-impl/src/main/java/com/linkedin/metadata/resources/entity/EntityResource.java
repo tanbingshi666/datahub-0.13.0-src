@@ -90,6 +90,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.artifact.versioning.ComparableVersion;
 
+
 /** Single unified resource for fetching, updating, searching, & browsing DataHub entities */
 @Slf4j
 @RestLiCollection(name = "entities", namespace = "com.linkedin.entity")
@@ -169,75 +170,54 @@ public class EntityResource extends CollectionResourceTaskTemplate<String, Entit
   @RestMethod.Get
   @Nonnull
   @WithSpan
-  public Task<AnyRecord> get(
-      @Nonnull String urnStr, @QueryParam(PARAM_ASPECTS) @Optional @Nullable String[] aspectNames)
-      throws URISyntaxException {
+  public Task<AnyRecord> get(@Nonnull String urnStr,
+      @QueryParam(PARAM_ASPECTS) @Optional @Nullable String[] aspectNames) throws URISyntaxException {
     log.info("GET {}", urnStr);
     final Urn urn = Urn.createFromString(urnStr);
     Authentication auth = AuthenticationContext.getAuthentication();
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            auth,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.GET_ENTITY_PRIVILEGE),
-            new EntitySpec(urn.getEntityType(), urnStr))) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to get entity " + urn);
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(auth, _authorizer,
+        ImmutableList.of(PoliciesConfig.GET_ENTITY_PRIVILEGE), new EntitySpec(urn.getEntityType(), urnStr))) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to get entity " + urn);
     }
-    return RestliUtil.toTask(
-        () -> {
-          final Set<String> projectedAspects =
-              aspectNames == null
-                  ? Collections.emptySet()
-                  : new HashSet<>(Arrays.asList(aspectNames));
-          final Entity entity = _entityService.getEntity(urn, projectedAspects);
-          if (entity == null) {
-            throw RestliUtil.resourceNotFoundException(String.format("Did not find %s", urnStr));
-          }
-          return new AnyRecord(entity.data());
-        },
-        MetricRegistry.name(this.getClass(), "get"));
+    return RestliUtil.toTask(() -> {
+      final Set<String> projectedAspects =
+          aspectNames == null ? Collections.emptySet() : new HashSet<>(Arrays.asList(aspectNames));
+      final Entity entity = _entityService.getEntity(urn, projectedAspects);
+      if (entity == null) {
+        throw RestliUtil.resourceNotFoundException(String.format("Did not find %s", urnStr));
+      }
+      return new AnyRecord(entity.data());
+    }, MetricRegistry.name(this.getClass(), "get"));
   }
 
   @RestMethod.BatchGet
   @Nonnull
   @WithSpan
-  public Task<Map<String, AnyRecord>> batchGet(
-      @Nonnull Set<String> urnStrs,
-      @QueryParam(PARAM_ASPECTS) @Optional @Nullable String[] aspectNames)
-      throws URISyntaxException {
+  public Task<Map<String, AnyRecord>> batchGet(@Nonnull Set<String> urnStrs,
+      @QueryParam(PARAM_ASPECTS) @Optional @Nullable String[] aspectNames) throws URISyntaxException {
     log.info("BATCH GET {}", urnStrs);
     final Set<Urn> urns = new HashSet<>();
     for (final String urnStr : urnStrs) {
       urns.add(Urn.createFromString(urnStr));
     }
-    List<java.util.Optional<EntitySpec>> resourceSpecs =
-        urns.stream()
-            .map(urn -> java.util.Optional.of(new EntitySpec(urn.getEntityType(), urn.toString())))
-            .collect(Collectors.toList());
+    List<java.util.Optional<EntitySpec>> resourceSpecs = urns.stream()
+        .map(urn -> java.util.Optional.of(new EntitySpec(urn.getEntityType(), urn.toString())))
+        .collect(Collectors.toList());
     Authentication auth = AuthenticationContext.getAuthentication();
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            auth,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.GET_ENTITY_PRIVILEGE),
-            resourceSpecs)) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to get entities: " + urnStrs);
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(auth, _authorizer,
+        ImmutableList.of(PoliciesConfig.GET_ENTITY_PRIVILEGE), resourceSpecs)) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED,
+          "User is unauthorized to get entities: " + urnStrs);
     }
-    return RestliUtil.toTask(
-        () -> {
-          final Set<String> projectedAspects =
-              aspectNames == null
-                  ? Collections.emptySet()
-                  : new HashSet<>(Arrays.asList(aspectNames));
-          return _entityService.getEntities(urns, projectedAspects).entrySet().stream()
-              .collect(
-                  Collectors.toMap(
-                      entry -> entry.getKey().toString(),
-                      entry -> new AnyRecord(entry.getValue().data())));
-        },
-        MetricRegistry.name(this.getClass(), "batchGet"));
+    return RestliUtil.toTask(() -> {
+      final Set<String> projectedAspects =
+          aspectNames == null ? Collections.emptySet() : new HashSet<>(Arrays.asList(aspectNames));
+      return _entityService.getEntities(urns, projectedAspects)
+          .entrySet()
+          .stream()
+          .collect(
+              Collectors.toMap(entry -> entry.getKey().toString(), entry -> new AnyRecord(entry.getValue().data())));
+    }, MetricRegistry.name(this.getClass(), "batchGet"));
   }
 
   private SystemMetadata populateDefaultFieldsIfEmpty(@Nullable SystemMetadata systemMetadata) {
@@ -256,21 +236,16 @@ public class EntityResource extends CollectionResourceTaskTemplate<String, Entit
   @Action(name = ACTION_INGEST)
   @Nonnull
   @WithSpan
-  public Task<Void> ingest(
-      @ActionParam(PARAM_ENTITY) @Nonnull Entity entity,
+  public Task<Void> ingest(@ActionParam(PARAM_ENTITY) @Nonnull Entity entity,
       @ActionParam(SYSTEM_METADATA) @Optional @Nullable SystemMetadata providedSystemMetadata)
       throws URISyntaxException {
     Authentication authentication = AuthenticationContext.getAuthentication();
     String actorUrnStr = authentication.getActor().toUrnStr();
     final Urn urn = com.datahub.util.ModelUtils.getUrnFromSnapshotUnion(entity.getValue());
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            authentication,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.EDIT_ENTITY_PRIVILEGE),
-            new EntitySpec(urn.getEntityType(), urn.toString()))) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to edit entity " + urn);
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(authentication,
+        _authorizer, ImmutableList.of(PoliciesConfig.EDIT_ENTITY_PRIVILEGE),
+        new EntitySpec(urn.getEntityType(), urn.toString()))) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to edit entity " + urn);
     }
 
     try {
@@ -281,43 +256,35 @@ public class EntityResource extends CollectionResourceTaskTemplate<String, Entit
 
     SystemMetadata systemMetadata = populateDefaultFieldsIfEmpty(providedSystemMetadata);
 
-    final AuditStamp auditStamp =
-        new AuditStamp().setTime(_clock.millis()).setActor(Urn.createFromString(actorUrnStr));
+    final AuditStamp auditStamp = new AuditStamp().setTime(_clock.millis()).setActor(Urn.createFromString(actorUrnStr));
 
     // variables referenced in lambdas are required to be final
     final SystemMetadata finalSystemMetadata = systemMetadata;
-    return RestliUtil.toTask(
-        () -> {
-          _entityService.ingestEntity(entity, auditStamp, finalSystemMetadata);
-          return null;
-        },
-        MetricRegistry.name(this.getClass(), "ingest"));
+    return RestliUtil.toTask(() -> {
+      /**
+       * 摄取元数据
+       */
+      _entityService.ingestEntity(entity, auditStamp, finalSystemMetadata);
+      return null;
+    }, MetricRegistry.name(this.getClass(), "ingest"));
   }
 
   @Action(name = ACTION_BATCH_INGEST)
   @Nonnull
   @WithSpan
-  public Task<Void> batchIngest(
-      @ActionParam(PARAM_ENTITIES) @Nonnull Entity[] entities,
-      @ActionParam(SYSTEM_METADATA) @Optional @Nullable SystemMetadata[] systemMetadataList)
-      throws URISyntaxException {
+  public Task<Void> batchIngest(@ActionParam(PARAM_ENTITIES) @Nonnull Entity[] entities,
+      @ActionParam(SYSTEM_METADATA) @Optional @Nullable SystemMetadata[] systemMetadataList) throws URISyntaxException {
 
     Authentication authentication = AuthenticationContext.getAuthentication();
     String actorUrnStr = authentication.getActor().toUrnStr();
-    List<java.util.Optional<EntitySpec>> resourceSpecs =
-        Arrays.stream(entities)
-            .map(Entity::getValue)
-            .map(com.datahub.util.ModelUtils::getUrnFromSnapshotUnion)
-            .map(urn -> java.util.Optional.of(new EntitySpec(urn.getEntityType(), urn.toString())))
-            .collect(Collectors.toList());
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            authentication,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.EDIT_ENTITY_PRIVILEGE),
-            resourceSpecs)) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to edit entities.");
+    List<java.util.Optional<EntitySpec>> resourceSpecs = Arrays.stream(entities)
+        .map(Entity::getValue)
+        .map(com.datahub.util.ModelUtils::getUrnFromSnapshotUnion)
+        .map(urn -> java.util.Optional.of(new EntitySpec(urn.getEntityType(), urn.toString())))
+        .collect(Collectors.toList());
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(authentication,
+        _authorizer, ImmutableList.of(PoliciesConfig.EDIT_ENTITY_PRIVILEGE), resourceSpecs)) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to edit entities.");
     }
 
     for (Entity entity : entities) {
@@ -328,8 +295,7 @@ public class EntityResource extends CollectionResourceTaskTemplate<String, Entit
       }
     }
 
-    final AuditStamp auditStamp =
-        new AuditStamp().setTime(_clock.millis()).setActor(Urn.createFromString(actorUrnStr));
+    final AuditStamp auditStamp = new AuditStamp().setTime(_clock.millis()).setActor(Urn.createFromString(actorUrnStr));
 
     if (systemMetadataList == null) {
       systemMetadataList = new SystemMetadata[entities.length];
@@ -339,307 +305,186 @@ public class EntityResource extends CollectionResourceTaskTemplate<String, Entit
       throw RestliUtil.invalidArgumentsException("entities and systemMetadata length must match");
     }
 
-    final List<SystemMetadata> finalSystemMetadataList =
-        Arrays.stream(systemMetadataList)
-            .map(systemMetadata -> populateDefaultFieldsIfEmpty(systemMetadata))
-            .collect(Collectors.toList());
+    final List<SystemMetadata> finalSystemMetadataList = Arrays.stream(systemMetadataList)
+        .map(systemMetadata -> populateDefaultFieldsIfEmpty(systemMetadata))
+        .collect(Collectors.toList());
 
-    return RestliUtil.toTask(
-        () -> {
-          _entityService.ingestEntities(
-              Arrays.asList(entities), auditStamp, finalSystemMetadataList);
-          return null;
-        },
-        MetricRegistry.name(this.getClass(), "batchIngest"));
+    return RestliUtil.toTask(() -> {
+      _entityService.ingestEntities(Arrays.asList(entities), auditStamp, finalSystemMetadataList);
+      return null;
+    }, MetricRegistry.name(this.getClass(), "batchIngest"));
   }
 
   @Action(name = ACTION_SEARCH)
   @Nonnull
   @WithSpan
-  public Task<SearchResult> search(
-      @ActionParam(PARAM_ENTITY) @Nonnull String entityName,
-      @ActionParam(PARAM_INPUT) @Nonnull String input,
-      @ActionParam(PARAM_FILTER) @Optional @Nullable Filter filter,
-      @ActionParam(PARAM_SORT) @Optional @Nullable SortCriterion sortCriterion,
-      @ActionParam(PARAM_START) int start,
+  public Task<SearchResult> search(@ActionParam(PARAM_ENTITY) @Nonnull String entityName,
+      @ActionParam(PARAM_INPUT) @Nonnull String input, @ActionParam(PARAM_FILTER) @Optional @Nullable Filter filter,
+      @ActionParam(PARAM_SORT) @Optional @Nullable SortCriterion sortCriterion, @ActionParam(PARAM_START) int start,
       @ActionParam(PARAM_COUNT) int count,
       @Optional @Deprecated @Nullable @ActionParam(PARAM_FULLTEXT) Boolean fulltext,
       @Optional @Nullable @ActionParam(PARAM_SEARCH_FLAGS) SearchFlags searchFlags) {
     Authentication auth = AuthenticationContext.getAuthentication();
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            auth,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.SEARCH_PRIVILEGE),
-            (EntitySpec) null)) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to search.");
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(auth, _authorizer,
+        ImmutableList.of(PoliciesConfig.SEARCH_PRIVILEGE), (EntitySpec) null)) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to search.");
     }
 
     OperationContext opContext = OperationContext.asSession(systemOperationContext, _authorizer, auth, true);
 
     log.info("GET SEARCH RESULTS for {} with query {}", entityName, input);
     // TODO - change it to use _searchService once we are confident on it's latency
-    return RestliUtil.toTask(
-        () -> {
-          final SearchResult result;
-          // This API is not used by the frontend for search bars so we default to structured
-          result =
-              _entitySearchService.search(opContext,
-                  List.of(entityName), input, filter, sortCriterion, start, count);
-          return validateSearchResult(result, _entityService);
-        },
-        MetricRegistry.name(this.getClass(), "search"));
+    return RestliUtil.toTask(() -> {
+      final SearchResult result;
+      // This API is not used by the frontend for search bars so we default to structured
+      result = _entitySearchService.search(opContext, List.of(entityName), input, filter, sortCriterion, start, count);
+      return validateSearchResult(result, _entityService);
+    }, MetricRegistry.name(this.getClass(), "search"));
   }
 
   @Action(name = ACTION_SEARCH_ACROSS_ENTITIES)
   @Nonnull
   @WithSpan
-  public Task<SearchResult> searchAcrossEntities(
-      @ActionParam(PARAM_ENTITIES) @Optional @Nullable String[] entities,
-      @ActionParam(PARAM_INPUT) @Nonnull String input,
-      @ActionParam(PARAM_FILTER) @Optional @Nullable Filter filter,
-      @ActionParam(PARAM_SORT) @Optional @Nullable SortCriterion sortCriterion,
-      @ActionParam(PARAM_START) int start,
-      @ActionParam(PARAM_COUNT) int count,
-      @ActionParam(PARAM_SEARCH_FLAGS) @Optional SearchFlags searchFlags) {
+  public Task<SearchResult> searchAcrossEntities(@ActionParam(PARAM_ENTITIES) @Optional @Nullable String[] entities,
+      @ActionParam(PARAM_INPUT) @Nonnull String input, @ActionParam(PARAM_FILTER) @Optional @Nullable Filter filter,
+      @ActionParam(PARAM_SORT) @Optional @Nullable SortCriterion sortCriterion, @ActionParam(PARAM_START) int start,
+      @ActionParam(PARAM_COUNT) int count, @ActionParam(PARAM_SEARCH_FLAGS) @Optional SearchFlags searchFlags) {
     Authentication auth = AuthenticationContext.getAuthentication();
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            auth,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.SEARCH_PRIVILEGE),
-            (EntitySpec) null)) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to search.");
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(auth, _authorizer,
+        ImmutableList.of(PoliciesConfig.SEARCH_PRIVILEGE), (EntitySpec) null)) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to search.");
     }
-    OperationContext opContext = OperationContext.asSession(
-            systemOperationContext, _authorizer, auth, true)
-            .withSearchFlags(flags -> searchFlags != null ? searchFlags : new SearchFlags().setFulltext(true));
+    OperationContext opContext = OperationContext.asSession(systemOperationContext, _authorizer, auth, true)
+        .withSearchFlags(flags -> searchFlags != null ? searchFlags : new SearchFlags().setFulltext(true));
 
     List<String> entityList = entities == null ? Collections.emptyList() : Arrays.asList(entities);
     log.info("GET SEARCH RESULTS ACROSS ENTITIES for {} with query {}", entityList, input);
-    return RestliUtil.toTask(
-        () ->
-            validateSearchResult(
-                _searchService.searchAcrossEntities(opContext,
-                    entityList, input, filter, sortCriterion, start, count),
-                _entityService),
-        "searchAcrossEntities");
+    return RestliUtil.toTask(() -> validateSearchResult(
+        _searchService.searchAcrossEntities(opContext, entityList, input, filter, sortCriterion, start, count),
+        _entityService), "searchAcrossEntities");
   }
 
   @Action(name = ACTION_SCROLL_ACROSS_ENTITIES)
   @Nonnull
   @WithSpan
-  public Task<ScrollResult> scrollAcrossEntities(
-      @ActionParam(PARAM_ENTITIES) @Optional @Nullable String[] entities,
-      @ActionParam(PARAM_INPUT) @Nonnull String input,
-      @ActionParam(PARAM_FILTER) @Optional @Nullable Filter filter,
+  public Task<ScrollResult> scrollAcrossEntities(@ActionParam(PARAM_ENTITIES) @Optional @Nullable String[] entities,
+      @ActionParam(PARAM_INPUT) @Nonnull String input, @ActionParam(PARAM_FILTER) @Optional @Nullable Filter filter,
       @ActionParam(PARAM_SORT) @Optional @Nullable SortCriterion sortCriterion,
-      @ActionParam(PARAM_SCROLL_ID) String scrollId,
-      @ActionParam(PARAM_KEEP_ALIVE) String keepAlive,
-      @ActionParam(PARAM_COUNT) int count,
-      @ActionParam(PARAM_SEARCH_FLAGS) @Optional SearchFlags searchFlags) {
+      @ActionParam(PARAM_SCROLL_ID) String scrollId, @ActionParam(PARAM_KEEP_ALIVE) String keepAlive,
+      @ActionParam(PARAM_COUNT) int count, @ActionParam(PARAM_SEARCH_FLAGS) @Optional SearchFlags searchFlags) {
     Authentication auth = AuthenticationContext.getAuthentication();
-    OperationContext opContext = OperationContext.asSession(
-            systemOperationContext, _authorizer, auth, true)
-            .withSearchFlags(flags -> searchFlags != null ? searchFlags : new SearchFlags().setFulltext(true));
+    OperationContext opContext = OperationContext.asSession(systemOperationContext, _authorizer, auth, true)
+        .withSearchFlags(flags -> searchFlags != null ? searchFlags : new SearchFlags().setFulltext(true));
 
     List<String> entityList = entities == null ? Collections.emptyList() : Arrays.asList(entities);
-    log.info(
-        "GET SCROLL RESULTS ACROSS ENTITIES for {} with query {} and scroll ID: {}",
-        entityList,
-        input,
-        scrollId);
+    log.info("GET SCROLL RESULTS ACROSS ENTITIES for {} with query {} and scroll ID: {}", entityList, input, scrollId);
 
-    return RestliUtil.toTask(
-        () ->
-            validateScrollResult(
-                _searchService.scrollAcrossEntities(
-                        opContext,
-                    entityList,
-                    input,
-                    filter,
-                    sortCriterion,
-                    scrollId,
-                    keepAlive,
-                    count),
-                _entityService),
-        "scrollAcrossEntities");
+    return RestliUtil.toTask(() -> validateScrollResult(
+        _searchService.scrollAcrossEntities(opContext, entityList, input, filter, sortCriterion, scrollId, keepAlive,
+            count), _entityService), "scrollAcrossEntities");
   }
 
   @Action(name = ACTION_SEARCH_ACROSS_LINEAGE)
   @Nonnull
   @WithSpan
-  public Task<LineageSearchResult> searchAcrossLineage(
-      @ActionParam(PARAM_URN) @Nonnull String urnStr,
+  public Task<LineageSearchResult> searchAcrossLineage(@ActionParam(PARAM_URN) @Nonnull String urnStr,
       @ActionParam(PARAM_DIRECTION) String direction,
       @ActionParam(PARAM_ENTITIES) @Optional @Nullable String[] entities,
       @ActionParam(PARAM_INPUT) @Optional @Nullable String input,
       @ActionParam(PARAM_MAX_HOPS) @Optional @Nullable Integer maxHops,
       @ActionParam(PARAM_FILTER) @Optional @Nullable Filter filter,
-      @ActionParam(PARAM_SORT) @Optional @Nullable SortCriterion sortCriterion,
-      @ActionParam(PARAM_START) int start,
+      @ActionParam(PARAM_SORT) @Optional @Nullable SortCriterion sortCriterion, @ActionParam(PARAM_START) int start,
       @ActionParam(PARAM_COUNT) int count,
       @ActionParam(PARAM_START_TIME_MILLIS) @Optional @Nullable Long startTimeMillis,
       @ActionParam(PARAM_END_TIME_MILLIS) @Optional @Nullable Long endTimeMillis,
-      @Optional @Nullable @ActionParam(PARAM_SEARCH_FLAGS) SearchFlags searchFlags)
-      throws URISyntaxException {
+      @Optional @Nullable @ActionParam(PARAM_SEARCH_FLAGS) SearchFlags searchFlags) throws URISyntaxException {
 
     Authentication auth = AuthenticationContext.getAuthentication();
-    OperationContext opContext = OperationContext.asSession(
-                    systemOperationContext, _authorizer, auth, true)
-            .withSearchFlags(flags -> searchFlags != null ? searchFlags : new SearchFlags().setFulltext(true));
+    OperationContext opContext = OperationContext.asSession(systemOperationContext, _authorizer, auth, true)
+        .withSearchFlags(flags -> searchFlags != null ? searchFlags : new SearchFlags().setFulltext(true));
 
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            auth,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.GET_ENTITY_PRIVILEGE),
-            (EntitySpec) null)) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to search.");
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(auth, _authorizer,
+        ImmutableList.of(PoliciesConfig.GET_ENTITY_PRIVILEGE), (EntitySpec) null)) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to search.");
     }
     Urn urn = Urn.createFromString(urnStr);
     List<String> entityList = entities == null ? Collections.emptyList() : Arrays.asList(entities);
-    log.info(
-        "GET SEARCH RESULTS ACROSS RELATIONSHIPS for source urn {}, direction {}, entities {} with query {}",
-        urnStr,
-        direction,
-        entityList,
-        input);
-    return RestliUtil.toTask(
-        () ->
-            validateLineageSearchResult(
-                _lineageSearchService.searchAcrossLineage(
-                        opContext,
-                    urn,
-                    LineageDirection.valueOf(direction),
-                    entityList,
-                    input,
-                    maxHops,
-                    filter,
-                    sortCriterion,
-                    start,
-                    count,
-                    startTimeMillis,
-                    endTimeMillis),
-                _entityService),
+    log.info("GET SEARCH RESULTS ACROSS RELATIONSHIPS for source urn {}, direction {}, entities {} with query {}",
+        urnStr, direction, entityList, input);
+    return RestliUtil.toTask(() -> validateLineageSearchResult(
+            _lineageSearchService.searchAcrossLineage(opContext, urn, LineageDirection.valueOf(direction), entityList,
+                input, maxHops, filter, sortCriterion, start, count, startTimeMillis, endTimeMillis), _entityService),
         "searchAcrossRelationships");
   }
 
   @Action(name = ACTION_SCROLL_ACROSS_LINEAGE)
   @Nonnull
   @WithSpan
-  public Task<LineageScrollResult> scrollAcrossLineage(
-      @ActionParam(PARAM_URN) @Nonnull String urnStr,
+  public Task<LineageScrollResult> scrollAcrossLineage(@ActionParam(PARAM_URN) @Nonnull String urnStr,
       @ActionParam(PARAM_DIRECTION) String direction,
       @ActionParam(PARAM_ENTITIES) @Optional @Nullable String[] entities,
       @ActionParam(PARAM_INPUT) @Optional @Nullable String input,
       @ActionParam(PARAM_MAX_HOPS) @Optional @Nullable Integer maxHops,
       @ActionParam(PARAM_FILTER) @Optional @Nullable Filter filter,
       @ActionParam(PARAM_SORT) @Optional @Nullable SortCriterion sortCriterion,
-      @ActionParam(PARAM_SCROLL_ID) String scrollId,
-      @ActionParam(PARAM_KEEP_ALIVE) String keepAlive,
+      @ActionParam(PARAM_SCROLL_ID) String scrollId, @ActionParam(PARAM_KEEP_ALIVE) String keepAlive,
       @ActionParam(PARAM_COUNT) int count,
       @ActionParam(PARAM_START_TIME_MILLIS) @Optional @Nullable Long startTimeMillis,
       @ActionParam(PARAM_END_TIME_MILLIS) @Optional @Nullable Long endTimeMillis,
-      @ActionParam(PARAM_SEARCH_FLAGS) @Optional @Nullable SearchFlags searchFlags)
-      throws URISyntaxException {
+      @ActionParam(PARAM_SEARCH_FLAGS) @Optional @Nullable SearchFlags searchFlags) throws URISyntaxException {
 
     Authentication auth = AuthenticationContext.getAuthentication();
-    OperationContext opContext = OperationContext.asSession(
-                    systemOperationContext, _authorizer, auth, true)
-            .withSearchFlags(flags -> searchFlags != null ? searchFlags : new SearchFlags().setSkipCache(true));
+    OperationContext opContext = OperationContext.asSession(systemOperationContext, _authorizer, auth, true)
+        .withSearchFlags(flags -> searchFlags != null ? searchFlags : new SearchFlags().setSkipCache(true));
 
     Urn urn = Urn.createFromString(urnStr);
     List<String> entityList = entities == null ? Collections.emptyList() : Arrays.asList(entities);
-    log.info(
-        "GET SCROLL RESULTS ACROSS RELATIONSHIPS for source urn {}, direction {}, entities {} with query {}",
-        urnStr,
-        direction,
-        entityList,
-        input);
+    log.info("GET SCROLL RESULTS ACROSS RELATIONSHIPS for source urn {}, direction {}, entities {} with query {}",
+        urnStr, direction, entityList, input);
 
-    return RestliUtil.toTask(
-        () ->
-            validateLineageScrollResult(
-                _lineageSearchService.scrollAcrossLineage(
-                        opContext,
-                    urn,
-                    LineageDirection.valueOf(direction),
-                    entityList,
-                    input,
-                    maxHops,
-                    filter,
-                    sortCriterion,
-                    scrollId,
-                    keepAlive,
-                    count,
-                    startTimeMillis,
-                    endTimeMillis),
-                _entityService),
-        "scrollAcrossLineage");
+    return RestliUtil.toTask(() -> validateLineageScrollResult(
+        _lineageSearchService.scrollAcrossLineage(opContext, urn, LineageDirection.valueOf(direction), entityList,
+            input, maxHops, filter, sortCriterion, scrollId, keepAlive, count, startTimeMillis, endTimeMillis),
+        _entityService), "scrollAcrossLineage");
   }
 
   @Action(name = ACTION_LIST)
   @Nonnull
   @WithSpan
-  public Task<ListResult> list(
-      @ActionParam(PARAM_ENTITY) @Nonnull String entityName,
+  public Task<ListResult> list(@ActionParam(PARAM_ENTITY) @Nonnull String entityName,
       @ActionParam(PARAM_FILTER) @Optional @Nullable Filter filter,
-      @ActionParam(PARAM_SORT) @Optional @Nullable SortCriterion sortCriterion,
-      @ActionParam(PARAM_START) int start,
+      @ActionParam(PARAM_SORT) @Optional @Nullable SortCriterion sortCriterion, @ActionParam(PARAM_START) int start,
       @ActionParam(PARAM_COUNT) int count) {
 
     Authentication auth = AuthenticationContext.getAuthentication();
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            auth,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.SEARCH_PRIVILEGE),
-            (EntitySpec) null)) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to search.");
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(auth, _authorizer,
+        ImmutableList.of(PoliciesConfig.SEARCH_PRIVILEGE), (EntitySpec) null)) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to search.");
     }
-    OperationContext opContext = OperationContext.asSession(
-            systemOperationContext, _authorizer, auth, true)
-            .withSearchFlags(flags -> new SearchFlags().setFulltext(false));
+    OperationContext opContext = OperationContext.asSession(systemOperationContext, _authorizer, auth, true)
+        .withSearchFlags(flags -> new SearchFlags().setFulltext(false));
 
     log.info("GET LIST RESULTS for {} with filter {}", entityName, filter);
-    return RestliUtil.toTask(
-        () ->
-            validateListResult(
-                toListResult(
-                    _entitySearchService.filter(opContext, entityName, filter, sortCriterion, start, count)),
-                _entityService),
-        MetricRegistry.name(this.getClass(), "filter"));
+    return RestliUtil.toTask(() -> validateListResult(
+        toListResult(_entitySearchService.filter(opContext, entityName, filter, sortCriterion, start, count)),
+        _entityService), MetricRegistry.name(this.getClass(), "filter"));
   }
 
   @Action(name = ACTION_AUTOCOMPLETE)
   @Nonnull
   @WithSpan
-  public Task<AutoCompleteResult> autocomplete(
-      @ActionParam(PARAM_ENTITY) @Nonnull String entityName,
-      @ActionParam(PARAM_QUERY) @Nonnull String query,
-      @ActionParam(PARAM_FIELD) @Optional @Nullable String field,
-      @ActionParam(PARAM_FILTER) @Optional @Nullable Filter filter,
-      @ActionParam(PARAM_LIMIT) int limit,
+  public Task<AutoCompleteResult> autocomplete(@ActionParam(PARAM_ENTITY) @Nonnull String entityName,
+      @ActionParam(PARAM_QUERY) @Nonnull String query, @ActionParam(PARAM_FIELD) @Optional @Nullable String field,
+      @ActionParam(PARAM_FILTER) @Optional @Nullable Filter filter, @ActionParam(PARAM_LIMIT) int limit,
       @ActionParam(PARAM_SEARCH_FLAGS) @Optional @Nullable SearchFlags searchFlags) {
 
     Authentication auth = AuthenticationContext.getAuthentication();
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            auth,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.SEARCH_PRIVILEGE),
-            (EntitySpec) null)) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to search.");
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(auth, _authorizer,
+        ImmutableList.of(PoliciesConfig.SEARCH_PRIVILEGE), (EntitySpec) null)) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to search.");
     }
-    OperationContext opContext = OperationContext.asSession(
-            systemOperationContext, _authorizer, auth, true)
-            .withSearchFlags(flags -> searchFlags != null ? searchFlags : flags);
+    OperationContext opContext = OperationContext.asSession(systemOperationContext, _authorizer, auth, true)
+        .withSearchFlags(flags -> searchFlags != null ? searchFlags : flags);
 
     return RestliUtil.toTask(
         () -> _entitySearchService.autoComplete(opContext, entityName, query, field, filter, limit),
@@ -649,35 +494,23 @@ public class EntityResource extends CollectionResourceTaskTemplate<String, Entit
   @Action(name = ACTION_BROWSE)
   @Nonnull
   @WithSpan
-  public Task<BrowseResult> browse(
-      @ActionParam(PARAM_ENTITY) @Nonnull String entityName,
-      @ActionParam(PARAM_PATH) @Nonnull String path,
-      @ActionParam(PARAM_FILTER) @Optional @Nullable Filter filter,
-      @ActionParam(PARAM_START) int start,
-      @ActionParam(PARAM_LIMIT) int limit,
+  public Task<BrowseResult> browse(@ActionParam(PARAM_ENTITY) @Nonnull String entityName,
+      @ActionParam(PARAM_PATH) @Nonnull String path, @ActionParam(PARAM_FILTER) @Optional @Nullable Filter filter,
+      @ActionParam(PARAM_START) int start, @ActionParam(PARAM_LIMIT) int limit,
       @ActionParam(PARAM_SEARCH_FLAGS) @Optional @Nullable SearchFlags searchFlags) {
 
     Authentication auth = AuthenticationContext.getAuthentication();
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            auth,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.SEARCH_PRIVILEGE),
-            (EntitySpec) null)) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to search.");
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(auth, _authorizer,
+        ImmutableList.of(PoliciesConfig.SEARCH_PRIVILEGE), (EntitySpec) null)) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to search.");
     }
-    OperationContext opContext = OperationContext.asSession(
-                    systemOperationContext, _authorizer, auth, true)
-            .withSearchFlags(flags -> searchFlags != null ? searchFlags : flags);
+    OperationContext opContext = OperationContext.asSession(systemOperationContext, _authorizer, auth, true)
+        .withSearchFlags(flags -> searchFlags != null ? searchFlags : flags);
 
     log.info("GET BROWSE RESULTS for {} at path {}", entityName, path);
     return RestliUtil.toTask(
-        () ->
-            validateBrowseResult(
-                _entitySearchService.browse(opContext, entityName, path, filter, start, limit),
-                _entityService),
-        MetricRegistry.name(this.getClass(), "browse"));
+        () -> validateBrowseResult(_entitySearchService.browse(opContext, entityName, path, filter, start, limit),
+            _entityService), MetricRegistry.name(this.getClass(), "browse"));
   }
 
   @Action(name = ACTION_GET_BROWSE_PATHS)
@@ -686,18 +519,12 @@ public class EntityResource extends CollectionResourceTaskTemplate<String, Entit
   public Task<StringArray> getBrowsePaths(
       @ActionParam(value = PARAM_URN, typeref = com.linkedin.common.Urn.class) @Nonnull Urn urn) {
     Authentication auth = AuthenticationContext.getAuthentication();
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            auth,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.GET_ENTITY_PRIVILEGE),
-            new EntitySpec(urn.getEntityType(), urn.toString()))) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to get entity: " + urn);
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(auth, _authorizer,
+        ImmutableList.of(PoliciesConfig.GET_ENTITY_PRIVILEGE), new EntitySpec(urn.getEntityType(), urn.toString()))) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to get entity: " + urn);
     }
     log.info("GET BROWSE PATHS for {}", urn);
-    return RestliUtil.toTask(
-        () -> new StringArray(_entitySearchService.getBrowsePaths(urnToEntityName(urn), urn)),
+    return RestliUtil.toTask(() -> new StringArray(_entitySearchService.getBrowsePaths(urnToEntityName(urn), urn)),
         MetricRegistry.name(this.getClass(), "getBrowsePaths"));
   }
 
@@ -715,8 +542,7 @@ public class EntityResource extends CollectionResourceTaskTemplate<String, Entit
   @Action(name = "deleteAll")
   @Nonnull
   @WithSpan
-  public Task<RollbackResponse> deleteEntities(
-      @ActionParam("registryId") @Optional String registryId,
+  public Task<RollbackResponse> deleteEntities(@ActionParam("registryId") @Optional String registryId,
       @ActionParam("dryRun") @Optional Boolean dryRun) {
     String registryName = null;
     ComparableVersion registryVersion = new ComparableVersion("0.0.0-dev");
@@ -726,65 +552,43 @@ public class EntityResource extends CollectionResourceTaskTemplate<String, Entit
         registryName = registryId.split(":")[0];
         registryVersion = new ComparableVersion(registryId.split(":")[1]);
       } catch (Exception e) {
-        throw new RestLiServiceException(
-            HttpStatus.S_500_INTERNAL_SERVER_ERROR,
-            "Failed to parse registry id: " + registryId,
-            e);
+        throw new RestLiServiceException(HttpStatus.S_500_INTERNAL_SERVER_ERROR,
+            "Failed to parse registry id: " + registryId, e);
       }
     }
     String finalRegistryName = registryName;
     ComparableVersion finalRegistryVersion = registryVersion;
     String finalRegistryName1 = registryName;
     ComparableVersion finalRegistryVersion1 = registryVersion;
-    return RestliUtil.toTask(
-        () -> {
-          RollbackResponse response = new RollbackResponse();
-          List<AspectRowSummary> aspectRowsToDelete =
-              _systemMetadataService.findByRegistry(
-                  finalRegistryName,
-                  finalRegistryVersion.toString(),
-                  false,
-                  0,
-                  ESUtils.MAX_RESULT_SIZE);
-          log.info("found {} rows to delete...", stringifyRowCount(aspectRowsToDelete.size()));
-          response.setAspectsAffected(aspectRowsToDelete.size());
-          Set<String> urns =
-              aspectRowsToDelete.stream()
-                  .collect(Collectors.groupingBy(AspectRowSummary::getUrn))
-                  .keySet();
-          List<java.util.Optional<EntitySpec>> resourceSpecs =
-              urns.stream()
-                  .map(UrnUtils::getUrn)
-                  .map(
-                      urn ->
-                          java.util.Optional.of(
-                              new EntitySpec(urn.getEntityType(), urn.toString())))
-                  .collect(Collectors.toList());
-          Authentication auth = AuthenticationContext.getAuthentication();
-          if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-              && !isAuthorized(
-                  auth,
-                  _authorizer,
-                  ImmutableList.of(PoliciesConfig.DELETE_ENTITY_PRIVILEGE),
-                  resourceSpecs)) {
-            throw new RestLiServiceException(
-                HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to delete entities.");
-          }
-          response.setEntitiesAffected(urns.size());
-          response.setEntitiesDeleted(
-              aspectRowsToDelete.stream().filter(AspectRowSummary::isKeyAspect).count());
-          response.setAspectRowSummaries(
-              new AspectRowSummaryArray(
-                  aspectRowsToDelete.subList(0, Math.min(100, aspectRowsToDelete.size()))));
-          if ((dryRun == null) || (!dryRun)) {
-            Map<String, String> conditions = new HashMap();
-            conditions.put("registryName", finalRegistryName1);
-            conditions.put("registryVersion", finalRegistryVersion1.toString());
-            _entityService.rollbackWithConditions(aspectRowsToDelete, conditions, false);
-          }
-          return response;
-        },
-        MetricRegistry.name(this.getClass(), "deleteAll"));
+    return RestliUtil.toTask(() -> {
+      RollbackResponse response = new RollbackResponse();
+      List<AspectRowSummary> aspectRowsToDelete =
+          _systemMetadataService.findByRegistry(finalRegistryName, finalRegistryVersion.toString(), false, 0,
+              ESUtils.MAX_RESULT_SIZE);
+      log.info("found {} rows to delete...", stringifyRowCount(aspectRowsToDelete.size()));
+      response.setAspectsAffected(aspectRowsToDelete.size());
+      Set<String> urns = aspectRowsToDelete.stream().collect(Collectors.groupingBy(AspectRowSummary::getUrn)).keySet();
+      List<java.util.Optional<EntitySpec>> resourceSpecs = urns.stream()
+          .map(UrnUtils::getUrn)
+          .map(urn -> java.util.Optional.of(new EntitySpec(urn.getEntityType(), urn.toString())))
+          .collect(Collectors.toList());
+      Authentication auth = AuthenticationContext.getAuthentication();
+      if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(auth, _authorizer,
+          ImmutableList.of(PoliciesConfig.DELETE_ENTITY_PRIVILEGE), resourceSpecs)) {
+        throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to delete entities.");
+      }
+      response.setEntitiesAffected(urns.size());
+      response.setEntitiesDeleted(aspectRowsToDelete.stream().filter(AspectRowSummary::isKeyAspect).count());
+      response.setAspectRowSummaries(
+          new AspectRowSummaryArray(aspectRowsToDelete.subList(0, Math.min(100, aspectRowsToDelete.size()))));
+      if ((dryRun == null) || (!dryRun)) {
+        Map<String, String> conditions = new HashMap();
+        conditions.put("registryName", finalRegistryName1);
+        conditions.put("registryVersion", finalRegistryVersion1.toString());
+        _entityService.rollbackWithConditions(aspectRowsToDelete, conditions, false);
+      }
+      return response;
+    }, MetricRegistry.name(this.getClass(), "deleteAll"));
   }
 
   /**
@@ -801,53 +605,43 @@ public class EntityResource extends CollectionResourceTaskTemplate<String, Entit
   @Action(name = ACTION_DELETE)
   @Nonnull
   @WithSpan
-  public Task<DeleteEntityResponse> deleteEntity(
-      @ActionParam(PARAM_URN) @Nonnull String urnStr,
+  public Task<DeleteEntityResponse> deleteEntity(@ActionParam(PARAM_URN) @Nonnull String urnStr,
       @ActionParam(PARAM_ASPECT_NAME) @Optional String aspectName,
       @ActionParam(PARAM_START_TIME_MILLIS) @Optional Long startTimeMills,
-      @ActionParam(PARAM_END_TIME_MILLIS) @Optional Long endTimeMillis)
-      throws URISyntaxException {
+      @ActionParam(PARAM_END_TIME_MILLIS) @Optional Long endTimeMillis) throws URISyntaxException {
     Urn urn = Urn.createFromString(urnStr);
     Authentication auth = AuthenticationContext.getAuthentication();
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            auth,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.DELETE_ENTITY_PRIVILEGE),
-            Collections.singletonList(
-                java.util.Optional.of(new EntitySpec(urn.getEntityType(), urn.toString()))))) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to delete entity: " + urnStr);
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(auth, _authorizer,
+        ImmutableList.of(PoliciesConfig.DELETE_ENTITY_PRIVILEGE),
+        Collections.singletonList(java.util.Optional.of(new EntitySpec(urn.getEntityType(), urn.toString()))))) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED,
+          "User is unauthorized to delete entity: " + urnStr);
     }
-    return RestliUtil.toTask(
-        () -> {
-          // Find the timeseries aspects to delete. If aspectName is null, delete all.
-          List<String> timeseriesAspectNames =
-              EntitySpecUtils.getEntityTimeseriesAspectNames(
-                  _entityService.getEntityRegistry(), urn.getEntityType());
-          if (aspectName != null && !timeseriesAspectNames.contains(aspectName)) {
-            throw new UnsupportedOperationException(
-                String.format("Not supported for non-timeseries aspect '{}'.", aspectName));
-          }
-          List<String> timeseriesAspectsToDelete =
-              (aspectName == null) ? timeseriesAspectNames : ImmutableList.of(aspectName);
+    return RestliUtil.toTask(() -> {
+      // Find the timeseries aspects to delete. If aspectName is null, delete all.
+      List<String> timeseriesAspectNames =
+          EntitySpecUtils.getEntityTimeseriesAspectNames(_entityService.getEntityRegistry(), urn.getEntityType());
+      if (aspectName != null && !timeseriesAspectNames.contains(aspectName)) {
+        throw new UnsupportedOperationException(
+            String.format("Not supported for non-timeseries aspect '{}'.", aspectName));
+      }
+      List<String> timeseriesAspectsToDelete =
+          (aspectName == null) ? timeseriesAspectNames : ImmutableList.of(aspectName);
 
-          DeleteEntityResponse response = new DeleteEntityResponse();
-          if (aspectName == null) {
-            RollbackRunResult result = _entityService.deleteUrn(urn);
-            response.setRows(result.getRowsDeletedFromEntityDeletion());
-          }
-          Long numTimeseriesDocsDeleted =
-              deleteTimeseriesAspects(
-                  urn, startTimeMills, endTimeMillis, timeseriesAspectsToDelete);
-          log.info("Total number of timeseries aspect docs deleted: {}", numTimeseriesDocsDeleted);
+      DeleteEntityResponse response = new DeleteEntityResponse();
+      if (aspectName == null) {
+        RollbackRunResult result = _entityService.deleteUrn(urn);
+        response.setRows(result.getRowsDeletedFromEntityDeletion());
+      }
+      Long numTimeseriesDocsDeleted =
+          deleteTimeseriesAspects(urn, startTimeMills, endTimeMillis, timeseriesAspectsToDelete);
+      log.info("Total number of timeseries aspect docs deleted: {}", numTimeseriesDocsDeleted);
 
-          response.setUrn(urnStr);
-          response.setTimeseriesRows(numTimeseriesDocsDeleted);
+      response.setUrn(urnStr);
+      response.setTimeseriesRows(numTimeseriesDocsDeleted);
 
-          return response;
-        },
-        MetricRegistry.name(this.getClass(), "delete"));
+      return response;
+    }, MetricRegistry.name(this.getClass(), "delete"));
   }
 
   /**
@@ -862,52 +656,36 @@ public class EntityResource extends CollectionResourceTaskTemplate<String, Entit
    * @param aspectsToDelete - The list of aspect names whose values need to be deleted.
    * @return The total number of documents deleted.
    */
-  private Long deleteTimeseriesAspects(
-      @Nonnull Urn urn,
-      @Nullable Long startTimeMillis,
-      @Nullable Long endTimeMillis,
+  private Long deleteTimeseriesAspects(@Nonnull Urn urn, @Nullable Long startTimeMillis, @Nullable Long endTimeMillis,
       @Nonnull List<String> aspectsToDelete) {
     long totalNumberOfDocsDeleted = 0;
     Authentication auth = AuthenticationContext.getAuthentication();
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            auth,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.DELETE_ENTITY_PRIVILEGE),
-            new EntitySpec(urn.getEntityType(), urn.toString()))) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to delete entity " + urn);
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(auth, _authorizer,
+        ImmutableList.of(PoliciesConfig.DELETE_ENTITY_PRIVILEGE),
+        new EntitySpec(urn.getEntityType(), urn.toString()))) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to delete entity " + urn);
     }
     // Construct the filter.
     List<Criterion> criteria = new ArrayList<>();
     criteria.add(QueryUtils.newCriterion("urn", urn.toString()));
     if (startTimeMillis != null) {
       criteria.add(
-          QueryUtils.newCriterion(
-              ES_FIELD_TIMESTAMP, startTimeMillis.toString(), Condition.GREATER_THAN_OR_EQUAL_TO));
+          QueryUtils.newCriterion(ES_FIELD_TIMESTAMP, startTimeMillis.toString(), Condition.GREATER_THAN_OR_EQUAL_TO));
     }
     if (endTimeMillis != null) {
       criteria.add(
-          QueryUtils.newCriterion(
-              ES_FIELD_TIMESTAMP, endTimeMillis.toString(), Condition.LESS_THAN_OR_EQUAL_TO));
+          QueryUtils.newCriterion(ES_FIELD_TIMESTAMP, endTimeMillis.toString(), Condition.LESS_THAN_OR_EQUAL_TO));
     }
     final Filter filter = QueryUtils.getFilterFromCriteria(criteria);
 
     // Delete all the timeseries aspects by the filter.
     final String entityType = urn.getEntityType();
     for (final String aspect : aspectsToDelete) {
-      DeleteAspectValuesResult result =
-          _timeseriesAspectService.deleteAspectValues(entityType, aspect, filter);
+      DeleteAspectValuesResult result = _timeseriesAspectService.deleteAspectValues(entityType, aspect, filter);
       totalNumberOfDocsDeleted += result.getNumDocsDeleted();
 
-      log.debug(
-          "Number of timeseries docs deleted for entity:{}, aspect:{}, urn:{}, startTime:{}, endTime:{}={}",
-          entityType,
-          aspect,
-          urn,
-          startTimeMillis,
-          endTimeMillis,
-          result.getNumDocsDeleted());
+      log.debug("Number of timeseries docs deleted for entity:{}, aspect:{}, urn:{}, startTime:{}, endTime:{}={}",
+          entityType, aspect, urn, startTimeMillis, endTimeMillis, result.getNumDocsDeleted());
     }
     return totalNumberOfDocsDeleted;
   }
@@ -915,24 +693,18 @@ public class EntityResource extends CollectionResourceTaskTemplate<String, Entit
   @Action(name = "deleteReferences")
   @Nonnull
   @WithSpan
-  public Task<DeleteReferencesResponse> deleteReferencesTo(
-      @ActionParam(PARAM_URN) @Nonnull String urnStr, @ActionParam("dryRun") @Optional Boolean dry)
-      throws URISyntaxException {
+  public Task<DeleteReferencesResponse> deleteReferencesTo(@ActionParam(PARAM_URN) @Nonnull String urnStr,
+      @ActionParam("dryRun") @Optional Boolean dry) throws URISyntaxException {
     boolean dryRun = dry != null ? dry : false;
 
     Urn urn = Urn.createFromString(urnStr);
     Authentication auth = AuthenticationContext.getAuthentication();
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            auth,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.DELETE_ENTITY_PRIVILEGE),
-            new EntitySpec(urn.getEntityType(), urnStr))) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to delete entity " + urnStr);
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(auth, _authorizer,
+        ImmutableList.of(PoliciesConfig.DELETE_ENTITY_PRIVILEGE), new EntitySpec(urn.getEntityType(), urnStr))) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED,
+          "User is unauthorized to delete entity " + urnStr);
     }
-    return RestliUtil.toTask(
-        () -> _deleteEntityService.deleteReferencesTo(urn, dryRun),
+    return RestliUtil.toTask(() -> _deleteEntityService.deleteReferencesTo(urn, dryRun),
         MetricRegistry.name(this.getClass(), "deleteReferences"));
   }
 
@@ -942,24 +714,18 @@ public class EntityResource extends CollectionResourceTaskTemplate<String, Entit
   @Action(name = "setWritable")
   @Nonnull
   @WithSpan
-  public Task<Void> setWriteable(
-      @ActionParam(PARAM_VALUE) @Optional("true") @Nonnull Boolean value) {
+  public Task<Void> setWriteable(@ActionParam(PARAM_VALUE) @Optional("true") @Nonnull Boolean value) {
     Authentication auth = AuthenticationContext.getAuthentication();
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            auth,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.SET_WRITEABLE_PRIVILEGE),
-            (EntitySpec) null)) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to enable and disable write mode.");
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(auth, _authorizer,
+        ImmutableList.of(PoliciesConfig.SET_WRITEABLE_PRIVILEGE), (EntitySpec) null)) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED,
+          "User is unauthorized to enable and disable write mode.");
     }
     log.info("setting entity resource to be writable");
-    return RestliUtil.toTask(
-        () -> {
-          _entityService.setWritable(value);
-          return null;
-        });
+    return RestliUtil.toTask(() -> {
+      _entityService.setWritable(value);
+      return null;
+    });
   }
 
   @Action(name = "getTotalEntityCount")
@@ -967,37 +733,24 @@ public class EntityResource extends CollectionResourceTaskTemplate<String, Entit
   @WithSpan
   public Task<Long> getTotalEntityCount(@ActionParam(PARAM_ENTITY) @Nonnull String entityName) {
     Authentication auth = AuthenticationContext.getAuthentication();
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            auth,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.GET_COUNTS_PRIVILEGE),
-            (EntitySpec) null)) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to get entity counts.");
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(auth, _authorizer,
+        ImmutableList.of(PoliciesConfig.GET_COUNTS_PRIVILEGE), (EntitySpec) null)) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to get entity counts.");
     }
-    OperationContext opContext = OperationContext.asSession(
-                    systemOperationContext, _authorizer, auth, true);
+    OperationContext opContext = OperationContext.asSession(systemOperationContext, _authorizer, auth, true);
     return RestliUtil.toTask(() -> _entitySearchService.docCount(opContext, entityName));
   }
 
   @Action(name = "batchGetTotalEntityCount")
   @Nonnull
   @WithSpan
-  public Task<LongMap> batchGetTotalEntityCount(
-      @ActionParam(PARAM_ENTITIES) @Nonnull String[] entityNames) {
+  public Task<LongMap> batchGetTotalEntityCount(@ActionParam(PARAM_ENTITIES) @Nonnull String[] entityNames) {
     Authentication auth = AuthenticationContext.getAuthentication();
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            auth,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.GET_COUNTS_PRIVILEGE),
-            (EntitySpec) null)) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to get entity counts.");
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(auth, _authorizer,
+        ImmutableList.of(PoliciesConfig.GET_COUNTS_PRIVILEGE), (EntitySpec) null)) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to get entity counts.");
     }
-    OperationContext opContext = OperationContext.asSession(
-            systemOperationContext, _authorizer, auth, true);
+    OperationContext opContext = OperationContext.asSession(systemOperationContext, _authorizer, auth, true);
     return RestliUtil.toTask(
         () -> new LongMap(_searchService.docCountPerEntity(opContext, Arrays.asList(entityNames))));
   }
@@ -1005,20 +758,12 @@ public class EntityResource extends CollectionResourceTaskTemplate<String, Entit
   @Action(name = ACTION_LIST_URNS)
   @Nonnull
   @WithSpan
-  public Task<ListUrnsResult> listUrns(
-      @ActionParam(PARAM_ENTITY) @Nonnull String entityName,
-      @ActionParam(PARAM_START) int start,
-      @ActionParam(PARAM_COUNT) int count)
-      throws URISyntaxException {
+  public Task<ListUrnsResult> listUrns(@ActionParam(PARAM_ENTITY) @Nonnull String entityName,
+      @ActionParam(PARAM_START) int start, @ActionParam(PARAM_COUNT) int count) throws URISyntaxException {
     Authentication auth = AuthenticationContext.getAuthentication();
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            auth,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.SEARCH_PRIVILEGE),
-            (EntitySpec) null)) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to search.");
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(auth, _authorizer,
+        ImmutableList.of(PoliciesConfig.SEARCH_PRIVILEGE), (EntitySpec) null)) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to search.");
     }
     log.info("LIST URNS for {} with start {} and count {}", entityName, start, count);
     return RestliUtil.toTask(() -> _entityService.listUrns(entityName, start, count), "listUrns");
@@ -1027,8 +772,7 @@ public class EntityResource extends CollectionResourceTaskTemplate<String, Entit
   @Action(name = ACTION_APPLY_RETENTION)
   @Nonnull
   @WithSpan
-  public Task<String> applyRetention(
-      @ActionParam(PARAM_START) @Optional @Nullable Integer start,
+  public Task<String> applyRetention(@ActionParam(PARAM_START) @Optional @Nullable Integer start,
       @ActionParam(PARAM_COUNT) @Optional @Nullable Integer count,
       @ActionParam("attemptWithVersion") @Optional @Nullable Integer attemptWithVersion,
       @ActionParam(PARAM_ASPECT_NAME) @Optional @Nullable String aspectName,
@@ -1039,14 +783,9 @@ public class EntityResource extends CollectionResourceTaskTemplate<String, Entit
       Urn resource = UrnUtils.getUrn(urn);
       resourceSpec = new EntitySpec(resource.getEntityType(), resource.toString());
     }
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            auth,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.APPLY_RETENTION_PRIVILEGE),
-            resourceSpec)) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to apply retention.");
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(auth, _authorizer,
+        ImmutableList.of(PoliciesConfig.APPLY_RETENTION_PRIVILEGE), resourceSpec)) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to apply retention.");
     }
     return RestliUtil.toTask(
         () -> _entityService.batchApplyRetention(start, count, attemptWithVersion, aspectName, urn),
@@ -1056,52 +795,34 @@ public class EntityResource extends CollectionResourceTaskTemplate<String, Entit
   @Action(name = ACTION_FILTER)
   @Nonnull
   @WithSpan
-  public Task<SearchResult> filter(
-      @ActionParam(PARAM_ENTITY) @Nonnull String entityName,
+  public Task<SearchResult> filter(@ActionParam(PARAM_ENTITY) @Nonnull String entityName,
       @ActionParam(PARAM_FILTER) Filter filter,
-      @ActionParam(PARAM_SORT) @Optional @Nullable SortCriterion sortCriterion,
-      @ActionParam(PARAM_START) int start,
+      @ActionParam(PARAM_SORT) @Optional @Nullable SortCriterion sortCriterion, @ActionParam(PARAM_START) int start,
       @ActionParam(PARAM_COUNT) int count) {
 
     Authentication auth = AuthenticationContext.getAuthentication();
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            auth,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.SEARCH_PRIVILEGE),
-            (EntitySpec) null)) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to search.");
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(auth, _authorizer,
+        ImmutableList.of(PoliciesConfig.SEARCH_PRIVILEGE), (EntitySpec) null)) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized to search.");
     }
-    OperationContext opContext = OperationContext.asSession(
-            systemOperationContext, _authorizer, auth, true);
+    OperationContext opContext = OperationContext.asSession(systemOperationContext, _authorizer, auth, true);
     log.info("FILTER RESULTS for {} with filter {}", entityName, filter);
-    return RestliUtil.toTask(
-        () ->
-            validateSearchResult(
-                _entitySearchService.filter(opContext.withSearchFlags(flags -> flags.setFulltext(true)), entityName, filter, sortCriterion, start, count),
-                _entityService),
-        MetricRegistry.name(this.getClass(), "search"));
+    return RestliUtil.toTask(() -> validateSearchResult(
+        _entitySearchService.filter(opContext.withSearchFlags(flags -> flags.setFulltext(true)), entityName, filter,
+            sortCriterion, start, count), _entityService), MetricRegistry.name(this.getClass(), "search"));
   }
 
   @Action(name = ACTION_EXISTS)
   @Nonnull
   @WithSpan
-  public Task<Boolean> exists(@ActionParam(PARAM_URN) @Nonnull String urnStr)
-      throws URISyntaxException {
+  public Task<Boolean> exists(@ActionParam(PARAM_URN) @Nonnull String urnStr) throws URISyntaxException {
     Urn urn = UrnUtils.getUrn(urnStr);
     Authentication auth = AuthenticationContext.getAuthentication();
-    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV))
-        && !isAuthorized(
-            auth,
-            _authorizer,
-            ImmutableList.of(PoliciesConfig.GET_ENTITY_PRIVILEGE),
-            new EntitySpec(urn.getEntityType(), urnStr))) {
-      throw new RestLiServiceException(
-          HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized get entity: " + urnStr);
+    if (Boolean.parseBoolean(System.getenv(REST_API_AUTHORIZATION_ENABLED_ENV)) && !isAuthorized(auth, _authorizer,
+        ImmutableList.of(PoliciesConfig.GET_ENTITY_PRIVILEGE), new EntitySpec(urn.getEntityType(), urnStr))) {
+      throw new RestLiServiceException(HttpStatus.S_401_UNAUTHORIZED, "User is unauthorized get entity: " + urnStr);
     }
     log.info("EXISTS for {}", urnStr);
-    return RestliUtil.toTask(
-        () -> _entityService.exists(urn, true), MetricRegistry.name(this.getClass(), "exists"));
+    return RestliUtil.toTask(() -> _entityService.exists(urn, true), MetricRegistry.name(this.getClass(), "exists"));
   }
 }

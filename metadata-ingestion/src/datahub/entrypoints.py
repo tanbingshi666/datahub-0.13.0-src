@@ -194,6 +194,7 @@ def main(**kwargs):
         '''
         datahub() 里面的逻辑是日志配置 暂时忽略
         由于在命令行存在 ingest --config xxx.yml 文件 故跳转到 datahub/cli/ingest_cli.py 文件对应的 run()
+        (请参考上面代码 datahub.add_command(ingest))
         '''
         sys.exit(datahub(standalone_mode=False, **kwargs))
     except click.Abort:

@@ -212,6 +212,14 @@ public class AspectResource extends CollectionResourceTaskTemplate<String, Versi
       @ActionParam(PARAM_PROPOSAL) @Nonnull MetadataChangeProposal metadataChangeProposal,
       @ActionParam(PARAM_ASYNC) @Optional(UNSET) String async)
       throws URISyntaxException {
+    /**
+     * INGEST PROPOSAL proposal: {aspectName=browsePathsV2, systemMetadata={lastRunId=no-run-id-provided,
+     * * lastObserved=1714382232829, runId=mysql-2024_04_29-17_16_36},
+     * * entityUrn=urn:li:dataset:(urn:li:dataPlatform:mysql,demo.demo2,PROD),
+     * * entityType=dataset,
+     * * aspect={contentType=application/json, value=ByteString(length=131,bytes=7b227061...227d5d7d)},
+     * * changeType=UPSERT}*
+     */
     log.info("INGEST PROPOSAL proposal: {}", metadataChangeProposal);
 
     final boolean asyncBool;
